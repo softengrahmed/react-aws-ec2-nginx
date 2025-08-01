@@ -1,0 +1,12 @@
+🔗 Progressive API Deployment Log - Fri Aug  1 18:17:53 UTC 2025
+=========================================
+Run ID: 16682180067
+Lambda Function: react-api-16682180067
+API Gateway: react-gateway-16682180067
+AWS Region: us-east-1
+Max Attempts: 3
+
+🔍 Pre-flight checks...
+
+An error occurred (AccessDeniedException) when calling the ListFunctions operation: User: arn:aws:iam::073651099697:user/lastchild is not authorized to perform: lambda:ListFunctions on resource: * because no identity-based policy allows the lambda:ListFunctions action
+⚠️ Lambda service not available, skipping API deployment

@@ -1,0 +1,124 @@
+🚀 Progressive S3 Deployment Log - Fri Aug  1 18:17:04 UTC 2025
+=========================================
+Run ID: 16682180067
+Bucket Name: react-serverless-16682180067
+AWS Region: us-east-1
+Max Attempts: 3
+
+🔍 Pre-flight checks...
+CloudFront Available: false
+AWS Account ID: 073651099697
+
+AWS CLI Configuration:
+aws-cli/2.27.60 Python/3.13.4 Linux/6.11.0-1018-azure exe/x86_64.ubuntu.24
+      Name                    Value             Type    Location
+      ----                    -----             ----    --------
+   profile                <not set>             None    None
+access_key     ****************5X5H              env    
+secret_key     ****************eFUP              env    
+    region                us-east-1              env    ['AWS_REGION', 'AWS_DEFAULT_REGION']
+
+🚀 Deploy attempt 1/3 - Fri Aug  1 18:17:09 UTC 2025
+-----------------------------------------
+📦 Creating S3 bucket: react-serverless-16682180067
+make_bucket: react-serverless-16682180067
+📤 Uploading static files to S3...
+Completed 5.2 KiB/168.6 KiB (41.3 KiB/s) with 9 file(s) remainingupload: build/logo192.png to s3://react-serverless-16682180067/logo192.png
+Completed 5.2 KiB/168.6 KiB (41.3 KiB/s) with 8 file(s) remainingCompleted 5.9 KiB/168.6 KiB (24.9 KiB/s) with 8 file(s) remainingupload: build/static/css/main.9a71fbc5.css to s3://react-serverless-16682180067/static/css/main.9a71fbc5.css
+Completed 5.9 KiB/168.6 KiB (24.9 KiB/s) with 7 file(s) remainingCompleted 6.0 KiB/168.6 KiB (24.5 KiB/s) with 7 file(s) remainingupload: build/robots.txt to s3://react-serverless-16682180067/robots.txt
+Completed 6.0 KiB/168.6 KiB (24.5 KiB/s) with 6 file(s) remainingCompleted 9.8 KiB/168.6 KiB (39.4 KiB/s) with 6 file(s) remainingupload: build/favicon.ico to s3://react-serverless-16682180067/favicon.ico
+Completed 9.8 KiB/168.6 KiB (39.4 KiB/s) with 5 file(s) remainingCompleted 19.2 KiB/168.6 KiB (77.2 KiB/s) with 5 file(s) remainingupload: build/logo512.png to s3://react-serverless-16682180067/logo512.png
+Completed 19.2 KiB/168.6 KiB (77.2 KiB/s) with 4 file(s) remainingCompleted 20.2 KiB/168.6 KiB (79.6 KiB/s) with 4 file(s) remainingupload: build/static/js/main.03b8fc8e.js.LICENSE.txt to s3://react-serverless-16682180067/static/js/main.03b8fc8e.js.LICENSE.txt
+Completed 20.2 KiB/168.6 KiB (79.6 KiB/s) with 3 file(s) remainingCompleted 22.7 KiB/168.6 KiB (88.9 KiB/s) with 3 file(s) remainingupload: build/static/media/logo.6ce24c58023cc2f8fd88fe9d219db6c6.svg to s3://react-serverless-16682180067/static/media/logo.6ce24c58023cc2f8fd88fe9d219db6c6.svg
+Completed 22.7 KiB/168.6 KiB (88.9 KiB/s) with 2 file(s) remainingCompleted 27.1 KiB/168.6 KiB (104.6 KiB/s) with 2 file(s) remainingupload: build/static/js/206.bb46e658.chunk.js to s3://react-serverless-16682180067/static/js/206.bb46e658.chunk.js
+Completed 27.1 KiB/168.6 KiB (104.6 KiB/s) with 1 file(s) remainingCompleted 168.6 KiB/168.6 KiB (388.3 KiB/s) with 1 file(s) remainingupload: build/static/js/main.03b8fc8e.js to s3://react-serverless-16682180067/static/js/main.03b8fc8e.js
+📤 Uploading HTML files to S3...
+Completed 403 Bytes/1.5 KiB (4.8 KiB/s) with 3 file(s) remainingupload: build/asset-manifest.json to s3://react-serverless-16682180067/asset-manifest.json
+Completed 403 Bytes/1.5 KiB (4.8 KiB/s) with 2 file(s) remainingCompleted 895 Bytes/1.5 KiB (4.1 KiB/s) with 2 file(s) remainingupload: build/manifest.json to s3://react-serverless-16682180067/manifest.json
+Completed 895 Bytes/1.5 KiB (4.1 KiB/s) with 1 file(s) remainingCompleted 1.5 KiB/1.5 KiB (6.9 KiB/s) with 1 file(s) remaining  upload: build/index.html to s3://react-serverless-16682180067/index.html
+
+Uploaded files:
+2025-08-01 18:17:13        403 asset-manifest.json
+2025-08-01 18:17:12       3870 favicon.ico
+2025-08-01 18:17:13        656 index.html
+2025-08-01 18:17:12       5347 logo192.png
+2025-08-01 18:17:12       9664 logo512.png
+2025-08-01 18:17:13        492 manifest.json
+2025-08-01 18:17:12         67 robots.txt
+2025-08-01 18:17:12        734 static/css/main.9a71fbc5.css
+2025-08-01 18:17:12       4491 static/js/206.bb46e658.chunk.js
+2025-08-01 18:17:12     144888 static/js/main.03b8fc8e.js
+2025-08-01 18:17:12        971 static/js/main.03b8fc8e.js.LICENSE.txt
+2025-08-01 18:17:12       2632 static/media/logo.6ce24c58023cc2f8fd88fe9d219db6c6.svg
+
+☁️ Attempting CloudFront deployment...
+⚠️ CloudFront not available, skipping to next strategy...
+🚀 Deploy attempt 2/3 - Fri Aug  1 18:17:13 UTC 2025
+-----------------------------------------
+🧹 Cleaning up previous attempt...
+delete: s3://react-serverless-16682180067/asset-manifest.json
+delete: s3://react-serverless-16682180067/favicon.ico
+delete: s3://react-serverless-16682180067/logo192.png
+delete: s3://react-serverless-16682180067/static/css/main.9a71fbc5.css
+delete: s3://react-serverless-16682180067/manifest.json
+delete: s3://react-serverless-16682180067/robots.txt
+delete: s3://react-serverless-16682180067/index.html
+delete: s3://react-serverless-16682180067/logo512.png
+delete: s3://react-serverless-16682180067/static/js/206.bb46e658.chunk.js
+delete: s3://react-serverless-16682180067/static/js/main.03b8fc8e.js
+delete: s3://react-serverless-16682180067/static/js/main.03b8fc8e.js.LICENSE.txt
+delete: s3://react-serverless-16682180067/static/media/logo.6ce24c58023cc2f8fd88fe9d219db6c6.svg
+remove_bucket: react-serverless-16682180067
+📦 Creating S3 bucket: react-serverless-16682180067
+make_bucket: react-serverless-16682180067
+📤 Uploading static files to S3...
+Completed 3.8 KiB/168.6 KiB (40.6 KiB/s) with 9 file(s) remainingupload: build/favicon.ico to s3://react-serverless-16682180067/favicon.ico
+Completed 3.8 KiB/168.6 KiB (40.6 KiB/s) with 8 file(s) remainingCompleted 4.5 KiB/168.6 KiB (19.8 KiB/s) with 8 file(s) remainingupload: build/static/css/main.9a71fbc5.css to s3://react-serverless-16682180067/static/css/main.9a71fbc5.css
+Completed 4.5 KiB/168.6 KiB (19.8 KiB/s) with 7 file(s) remainingCompleted 8.9 KiB/168.6 KiB (36.0 KiB/s) with 7 file(s) remainingupload: build/static/js/206.bb46e658.chunk.js to s3://react-serverless-16682180067/static/js/206.bb46e658.chunk.js
+Completed 8.9 KiB/168.6 KiB (36.0 KiB/s) with 6 file(s) remainingCompleted 14.1 KiB/168.6 KiB (55.4 KiB/s) with 6 file(s) remainingupload: build/logo192.png to s3://react-serverless-16682180067/logo192.png
+Completed 14.1 KiB/168.6 KiB (55.4 KiB/s) with 5 file(s) remainingCompleted 23.5 KiB/168.6 KiB (88.4 KiB/s) with 5 file(s) remainingupload: build/logo512.png to s3://react-serverless-16682180067/logo512.png
+Completed 23.5 KiB/168.6 KiB (88.4 KiB/s) with 4 file(s) remainingCompleted 24.5 KiB/168.6 KiB (90.2 KiB/s) with 4 file(s) remainingupload: build/static/js/main.03b8fc8e.js.LICENSE.txt to s3://react-serverless-16682180067/static/js/main.03b8fc8e.js.LICENSE.txt
+Completed 24.5 KiB/168.6 KiB (90.2 KiB/s) with 3 file(s) remainingCompleted 27.1 KiB/168.6 KiB (95.5 KiB/s) with 3 file(s) remainingupload: build/static/media/logo.6ce24c58023cc2f8fd88fe9d219db6c6.svg to s3://react-serverless-16682180067/static/media/logo.6ce24c58023cc2f8fd88fe9d219db6c6.svg
+Completed 27.1 KiB/168.6 KiB (95.5 KiB/s) with 2 file(s) remainingCompleted 168.6 KiB/168.6 KiB (385.3 KiB/s) with 2 file(s) remainingupload: build/static/js/main.03b8fc8e.js to s3://react-serverless-16682180067/static/js/main.03b8fc8e.js
+Completed 168.6 KiB/168.6 KiB (385.3 KiB/s) with 1 file(s) remainingCompleted 168.6 KiB/168.6 KiB (245.4 KiB/s) with 1 file(s) remainingupload: build/robots.txt to s3://react-serverless-16682180067/robots.txt
+📤 Uploading HTML files to S3...
+Completed 403 Bytes/1.5 KiB (4.2 KiB/s) with 3 file(s) remainingupload: build/asset-manifest.json to s3://react-serverless-16682180067/asset-manifest.json
+Completed 403 Bytes/1.5 KiB (4.2 KiB/s) with 2 file(s) remainingCompleted 895 Bytes/1.5 KiB (3.9 KiB/s) with 2 file(s) remainingupload: build/manifest.json to s3://react-serverless-16682180067/manifest.json
+Completed 895 Bytes/1.5 KiB (3.9 KiB/s) with 1 file(s) remainingCompleted 1.5 KiB/1.5 KiB (6.7 KiB/s) with 1 file(s) remaining  upload: build/index.html to s3://react-serverless-16682180067/index.html
+
+Uploaded files:
+2025-08-01 18:17:39        403 asset-manifest.json
+2025-08-01 18:17:38       3870 favicon.ico
+2025-08-01 18:17:39        656 index.html
+2025-08-01 18:17:38       5347 logo192.png
+2025-08-01 18:17:38       9664 logo512.png
+2025-08-01 18:17:39        492 manifest.json
+2025-08-01 18:17:38         67 robots.txt
+2025-08-01 18:17:38        734 static/css/main.9a71fbc5.css
+2025-08-01 18:17:38       4491 static/js/206.bb46e658.chunk.js
+2025-08-01 18:17:38     144888 static/js/main.03b8fc8e.js
+2025-08-01 18:17:38        971 static/js/main.03b8fc8e.js.LICENSE.txt
+2025-08-01 18:17:38       2632 static/media/logo.6ce24c58023cc2f8fd88fe9d219db6c6.svg
+
+🌐 Attempting S3 Website deployment...
+Removing public access block...
+Configuring website hosting...
+Setting bucket policy for public read...
+{"Version": "2012-10-17", "Statement": [{"Sid": "PublicRead", "Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "arn:aws:s3:::react-serverless-16682180067/*"}]}
+Setting CORS configuration...
+{"CORSRules": [{"AllowedHeaders": ["*"], "AllowedMethods": ["GET", "HEAD"], "AllowedOrigins": ["*"], "MaxAgeSeconds": 3600}]}
+✅ S3 Website deployment successful: http://react-serverless-16682180067.s3-website-us-east-1.amazonaws.com
+✅ Deployment successful using strategy 2 - Fri Aug  1 18:17:43 UTC 2025
+
+Final AWS Resources:
+                           PRE static/
+2025-08-01 18:17:39        403 asset-manifest.json
+2025-08-01 18:17:38       3870 favicon.ico
+2025-08-01 18:17:39        656 index.html
+2025-08-01 18:17:38       5347 logo192.png
+2025-08-01 18:17:38       9664 logo512.png
+2025-08-01 18:17:39        492 manifest.json
+2025-08-01 18:17:38         67 robots.txt
+
+=========================================
+Deployment completed at Fri Aug  1 18:17:44 UTC 2025

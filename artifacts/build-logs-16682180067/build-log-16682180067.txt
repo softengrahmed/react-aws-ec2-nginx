@@ -1,0 +1,96 @@
+🏗️ Progressive React Build Log - Fri Aug  1 18:16:36 UTC 2025
+=========================================
+Run ID: 16682180067
+Node Version: 18
+Max Attempts: 3
+
+🏗️ Build attempt 1/3 - Fri Aug  1 18:16:36 UTC 2025
+-----------------------------------------
+Strategy: Standard build
+Running: npm ci --no-audit --prefer-offline
+npm warn deprecated stable@0.1.8: Modern JS already guarantees Array#sort() is a stable sort, so this library is deprecated. See the compatibility table on MDN: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/sort#browser_compatibility
+npm warn deprecated @babel/plugin-proposal-private-methods@7.18.6: This proposal has been merged to the ECMAScript standard and thus this plugin is no longer maintained. Please use @babel/plugin-transform-private-methods instead.
+npm warn deprecated @babel/plugin-proposal-class-properties@7.18.6: This proposal has been merged to the ECMAScript standard and thus this plugin is no longer maintained. Please use @babel/plugin-transform-class-properties instead.
+npm warn deprecated @babel/plugin-proposal-numeric-separator@7.18.6: This proposal has been merged to the ECMAScript standard and thus this plugin is no longer maintained. Please use @babel/plugin-transform-numeric-separator instead.
+npm warn deprecated @babel/plugin-proposal-nullish-coalescing-operator@7.18.6: This proposal has been merged to the ECMAScript standard and thus this plugin is no longer maintained. Please use @babel/plugin-transform-nullish-coalescing-operator instead.
+npm warn deprecated rollup-plugin-terser@7.0.2: This package has been deprecated and is no longer maintained. Please use @rollup/plugin-terser
+npm warn deprecated abab@2.0.6: Use your platform's native atob() and btoa() methods instead
+npm warn deprecated @babel/plugin-proposal-optional-chaining@7.21.0: This proposal has been merged to the ECMAScript standard and thus this plugin is no longer maintained. Please use @babel/plugin-transform-optional-chaining instead.
+npm warn deprecated domexception@2.0.1: Use your platform's native DOMException instead
+npm warn deprecated w3c-hr-time@1.0.2: Use your platform's native performance.now() and performance.timeOrigin.
+npm warn deprecated sourcemap-codec@1.4.8: Please use @jridgewell/sourcemap-codec instead
+npm warn deprecated workbox-cacheable-response@6.6.0: workbox-background-sync@6.6.0
+npm warn deprecated workbox-google-analytics@6.6.0: It is not compatible with newer versions of GA starting with v4, as long as you are using GAv3 it should be ok, but the package is not longer being maintained
+npm warn deprecated svgo@1.3.2: This SVGO version is no longer supported. Upgrade to v2.x.x.
+
+added 1560 packages in 11s
+
+262 packages are looking for funding
+  run `npm fund` for details
+Running: npm run build
+
+> react-aws-ec2-nginx@0.1.0 build
+> react-scripts build
+
+Creating an optimized production build...
+Browserslist: caniuse-lite is outdated. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+[0;33mOne of your dependencies, babel-preset-react-app, is importing the
+"@babel/plugin-proposal-private-property-in-object" package without
+declaring it in its dependencies. This is currently working because
+"@babel/plugin-proposal-private-property-in-object" is already in your
+node_modules folder for unrelated reasons, but it [1mmay break at any time[0;33m.
+
+babel-preset-react-app is part of the create-react-app project, [1mwhich
+is not maintianed anymore[0;33m. It is thus unlikely that this bug will
+ever be fixed. Add "@babel/plugin-proposal-private-property-in-object" to
+your devDependencies to work around this error. This will make this message
+go away.[0m
+  
+Browserslist: caniuse-lite is outdated. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+Compiled successfully.
+
+File sizes after gzip:
+
+  47.06 kB  build/static/js/main.03b8fc8e.js
+  1.73 kB   build/static/js/206.bb46e658.chunk.js
+  476 B     build/static/css/main.9a71fbc5.css
+
+The project was built assuming it is hosted at /.
+You can control this with the homepage field in your package.json.
+
+The build folder is ready to be deployed.
+You may serve it with a static server:
+
+  npm install -g serve
+  serve -s build
+
+Find out more about deployment here:
+
+  https://cra.link/deployment
+
+✅ Build successful on attempt 1 (Size: 224K) - Fri Aug  1 18:16:53 UTC 2025
+
+Build contents:
+total 52
+drwxr-xr-x 3 runner docker 4096 Aug  1 18:16 .
+drwxr-xr-x 9 runner docker 4096 Aug  1 18:16 ..
+-rw-r--r-- 1 runner docker  403 Aug  1 18:16 asset-manifest.json
+-rw-r--r-- 1 runner docker 3870 Aug  1 18:16 favicon.ico
+-rw-r--r-- 1 runner docker  656 Aug  1 18:16 index.html
+-rw-r--r-- 1 runner docker 5347 Aug  1 18:16 logo192.png
+-rw-r--r-- 1 runner docker 9664 Aug  1 18:16 logo512.png
+-rw-r--r-- 1 runner docker  492 Aug  1 18:16 manifest.json
+-rw-r--r-- 1 runner docker   67 Aug  1 18:16 robots.txt
+drwxr-xr-x 5 runner docker 4096 Aug  1 18:16 static
+
+Static assets:
+build/static/js/206.bb46e658.chunk.js
+build/static/js/main.03b8fc8e.js
+build/static/css/main.9a71fbc5.css
+
+=========================================
+Build completed at Fri Aug  1 18:16:53 UTC 2025

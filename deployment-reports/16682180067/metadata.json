@@ -1,0 +1,42 @@
+{
+  "run_id": "16682180067",
+  "timestamp": "20250801-181822",
+  "commit_sha": "98ffe07bdc06b66651ea371ac4caebce998bff3f",
+  "ref": "refs/heads/main",
+  "actor": "softengrahmed",
+  "event_name": "push",
+  "environment": "production",
+  "max_retries": "3",
+  "aws_region": "us-east-1",
+  "node_version": "18",
+  "resources": {
+    "s3_bucket": "react-serverless-16682180067",
+    "lambda_function": "react-api-16682180067",
+    "api_gateway": "react-gateway-16682180067"
+  },
+  "urls": {
+    "frontend": "N/A",
+    "cloudfront": "N/A",
+    "api": "N/A"
+  },
+  "deployment_results": {
+    "build_attempts": "0",
+    "deploy_attempts": "0",
+    "api_attempts": "0",
+    "verify_attempts": "0",
+    "deployment_type": "unknown",
+    "verification_status": "skipped"
+  },
+  "log_files": [
+    "build-log-16682180067.txt",
+    "deploy-log-16682180067.txt",
+    "api-log-16682180067.txt",
+    "verify-log-16682180067.txt",
+    "pipeline-summary.txt"
+  ],
+  "branch_info": {
+    "branch_name": "deployment-report-16682180067-20250801-181822",
+    "created_at": "2025-08-01T18:18:22Z",
+    "generator": "Progressive Resilient Pipeline v14"
+  }
+}
