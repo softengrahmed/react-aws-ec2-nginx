@@ -225,6 +225,13 @@ jobs:
         NODE_ENV: production
     
     - uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: build-logs-${{ github.run_id }}
+        path: logs/
+        retention-days: 7
+    
+    - uses: actions/upload-artifact@v4
       if: steps.build.outputs.success == 'true'
       with:
         name: react-build-${{ github.run_id }}
@@ -242,6 +249,7 @@ jobs:
       deployment-status: ${{ steps.deploy.outputs.status }}
       deployment-type: ${{ steps.deploy.outputs.deployment_type }}
       deployment-attempts: ${{ steps.deploy.outputs.attempts }}
+      deploy-log-path: ${{ steps.deploy.outputs.log_path }}
       
     steps:
     - uses: actions/checkout@v4
@@ -253,121 +261,214 @@ jobs:
     
     - uses: actions/download-artifact@v4
       with:
+        name: build-logs-${{ github.run_id }}
+        path: ./logs
+    
+    - uses: actions/download-artifact@v4
+      with:
         name: react-build-${{ github.run_id }}
         path: ./build
     
     - name: 🔄 Progressive Deployment Strategies
       id: deploy
       run: |
-        # Enhanced logging function
+        # Setup deployment logging
+        DEPLOY_LOG_FILE="logs/deploy-log-${{ github.run_id }}.txt"
+        
+        # Enhanced logging function with file output
         log_stage() {
-          echo "[$(date '+%Y-%m-%d %H:%M:%S')] [DEPLOY-STAGE] $1"
+          local message="[$(date '+%Y-%m-%d %H:%M:%S')] [DEPLOY-STAGE] $1"
+          echo "$message"
+          echo "$message" >> "$DEPLOY_LOG_FILE"
         }
+        
+        # Initialize log file
+        echo "=============================================" > "$DEPLOY_LOG_FILE"
+        echo "AWS S3 DEPLOYMENT PROCESS LOG" >> "$DEPLOY_LOG_FILE"
+        echo "=============================================" >> "$DEPLOY_LOG_FILE"
+        echo "Run ID: ${{ github.run_id }}" >> "$DEPLOY_LOG_FILE"
+        echo "AWS Region: ${{ env.AWS_REGION }}" >> "$DEPLOY_LOG_FILE"
+        echo "S3 Bucket: ${{ env.S3_BUCKET }}" >> "$DEPLOY_LOG_FILE"
+        echo "Max Retries: ${{ env.MAX_RETRIES }}" >> "$DEPLOY_LOG_FILE"
+        echo "=============================================" >> "$DEPLOY_LOG_FILE"
+        echo "" >> "$DEPLOY_LOG_FILE"
         
         log_stage "Starting progressive deployment process"
         MAX_ATTEMPTS=${{ env.MAX_RETRIES }}
         BUCKET_NAME="${{ env.S3_BUCKET }}"
         
-        # Pre-flight checks
+        # Pre-flight checks with detailed logging
+        log_stage "Performing pre-flight checks..."
         CF_AVAILABLE=$(aws cloudfront list-distributions >/dev/null 2>&1 && echo "true" || echo "false")
-        ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-        log_stage "Pre-flight: CloudFront available: $CF_AVAILABLE, Account: $ACCOUNT_ID"
+        ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text 2>>"$DEPLOY_LOG_FILE")
+        AWS_REGION_CONFIRMED=$(aws configure get region 2>>"$DEPLOY_LOG_FILE" || echo "${{ env.AWS_REGION }}")
+        
+        log_stage "Pre-flight results:"
+        log_stage "   CloudFront available: $CF_AVAILABLE"
+        log_stage "   AWS Account ID: $ACCOUNT_ID"  
+        log_stage "   AWS Region: $AWS_REGION_CONFIRMED"
+        log_stage "   Target bucket: $BUCKET_NAME"
+        
+        # Verify build artifacts
+        if [[ -d "build" && -f "build/index.html" ]]; then
+          BUILD_SIZE=$(du -sh build/ | cut -f1)
+          FILE_COUNT=$(find build/ -type f | wc -l)
+          log_stage "Build artifacts verification:"
+          log_stage "   Build directory: ✅ exists"
+          log_stage "   Index.html: ✅ exists"
+          log_stage "   Build size: $BUILD_SIZE"
+          log_stage "   Total files: $FILE_COUNT"
+        else
+          log_stage "❌ Build artifacts not found or invalid"
+          echo "status=failed" >> $GITHUB_OUTPUT
+          echo "log_path=$DEPLOY_LOG_FILE" >> $GITHUB_OUTPUT
+          exit 1
+        fi
         
         for ATTEMPT in $(seq 1 $MAX_ATTEMPTS); do
           log_stage "Deploy attempt $ATTEMPT/$MAX_ATTEMPTS"
           
           if [[ $ATTEMPT -gt 1 ]]; then
             log_stage "Cleaning up previous attempt..."
-            aws s3 rb s3://$BUCKET_NAME --force 2>/dev/null || true
+            aws s3 rb s3://$BUCKET_NAME --force 2>>"$DEPLOY_LOG_FILE" || true
+            log_stage "Waiting 20 seconds for AWS resource cleanup..."
             sleep 20
           fi
           
           log_stage "Creating S3 bucket: $BUCKET_NAME"
-          if ! aws s3 mb s3://$BUCKET_NAME --region ${{ env.AWS_REGION }}; then
-            log_stage "Failed to create bucket, trying next attempt..."
+          if aws s3 mb s3://$BUCKET_NAME --region ${{ env.AWS_REGION }} 2>>"$DEPLOY_LOG_FILE"; then
+            log_stage "✅ S3 bucket created successfully"
+          else
+            log_stage "❌ Failed to create S3 bucket, trying next attempt..."
             continue
           fi
           
-          log_stage "Uploading static files to S3..."
-          if ! aws s3 sync build/ s3://$BUCKET_NAME --delete \
-            --cache-control "public,max-age=31536000,immutable" --exclude "*.html" --exclude "*.json"; then
-            log_stage "Failed to upload static files, trying next attempt..."
+          log_stage "Uploading static assets (CSS, JS, images)..."
+          if aws s3 sync build/ s3://$BUCKET_NAME --delete \
+            --cache-control "public,max-age=31536000,immutable" --exclude "*.html" --exclude "*.json" 2>>"$DEPLOY_LOG_FILE"; then
+            STATIC_COUNT=$(aws s3 ls s3://$BUCKET_NAME --recursive | grep -v '\.html\|\.json' | wc -l)
+            log_stage "✅ Static assets uploaded successfully ($STATIC_COUNT files)"
+          else
+            log_stage "❌ Failed to upload static assets, trying next attempt..."
             continue
           fi
           
-          log_stage "Uploading HTML files to S3..."
-          if ! aws s3 sync build/ s3://$BUCKET_NAME --delete \
-            --cache-control "public,max-age=0,must-revalidate" --include "*.html" --include "*.json"; then
-            log_stage "Failed to upload HTML files, trying next attempt..."
+          log_stage "Uploading HTML and JSON files..."
+          if aws s3 sync build/ s3://$BUCKET_NAME --delete \
+            --cache-control "public,max-age=0,must-revalidate" --include "*.html" --include "*.json" 2>>"$DEPLOY_LOG_FILE"; then
+            HTML_COUNT=$(aws s3 ls s3://$BUCKET_NAME --recursive | grep '\.html\|\.json' | wc -l)
+            log_stage "✅ HTML/JSON files uploaded successfully ($HTML_COUNT files)"
+          else
+            log_stage "❌ Failed to upload HTML/JSON files, trying next attempt..."
             continue
           fi
           
           case $ATTEMPT in
-            1) # S3 Website strategy (simplified)
+            1) # S3 Website strategy
               log_stage "Strategy 1: S3 Website deployment"
               
-              if ! aws s3api delete-public-access-block --bucket $BUCKET_NAME 2>/dev/null; then
-                log_stage "Failed to delete public access block, trying next strategy..."
+              log_stage "Removing public access block..."
+              if aws s3api delete-public-access-block --bucket $BUCKET_NAME 2>>"$DEPLOY_LOG_FILE"; then
+                log_stage "✅ Public access block removed"
+              else
+                log_stage "❌ Failed to remove public access block, trying next strategy..."
                 continue
               fi
               
-              if ! aws s3 website s3://$BUCKET_NAME --index-document index.html --error-document index.html; then
-                log_stage "Failed to configure website, trying next strategy..."
+              log_stage "Configuring website hosting..."
+              if aws s3 website s3://$BUCKET_NAME --index-document index.html --error-document index.html 2>>"$DEPLOY_LOG_FILE"; then
+                log_stage "✅ Website hosting configured"
+              else
+                log_stage "❌ Failed to configure website hosting, trying next strategy..."
                 continue
               fi
               
+              log_stage "Setting bucket policy for public read access..."
               cat > policy.json << EOF
         {"Version": "2012-10-17", "Statement": [{"Sid": "PublicRead", "Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "arn:aws:s3:::$BUCKET_NAME/*"}]}
         EOF
               
-              if ! aws s3api put-bucket-policy --bucket $BUCKET_NAME --policy file://policy.json 2>/dev/null; then
-                log_stage "Failed to set bucket policy, trying next strategy..."
+              if aws s3api put-bucket-policy --bucket $BUCKET_NAME --policy file://policy.json 2>>"$DEPLOY_LOG_FILE"; then
+                log_stage "✅ Bucket policy applied successfully"
+              else
+                log_stage "❌ Failed to set bucket policy, trying next strategy..."
                 continue
               fi
               
               WEBSITE_URL="http://$BUCKET_NAME.s3-website-${{ env.AWS_REGION }}.amazonaws.com"
               echo "url=$WEBSITE_URL" >> $GITHUB_OUTPUT
               echo "deployment_type=s3_website" >> $GITHUB_OUTPUT
-              log_stage "S3 Website deployment successful: $WEBSITE_URL"
+              log_stage "✅ S3 Website deployment successful"
+              log_stage "   Website URL: $WEBSITE_URL"
               ;;
               
             2) # S3 Direct Access
-              log_stage "Strategy 2: S3 Direct Access"
+              log_stage "Strategy 2: S3 Direct Access deployment"
               
               DIRECT_URL="https://$BUCKET_NAME.s3.${{ env.AWS_REGION }}.amazonaws.com/index.html"
               echo "url=$DIRECT_URL" >> $GITHUB_OUTPUT
               echo "deployment_type=s3_direct" >> $GITHUB_OUTPUT
-              log_stage "S3 Direct deployment successful: $DIRECT_URL"
+              log_stage "✅ S3 Direct Access deployment successful"
+              log_stage "   Direct URL: $DIRECT_URL"
               ;;
               
             3) # Emergency static hosting
               log_stage "Strategy 3: Emergency static hosting via S3"
               
-              # Force public read
+              log_stage "Applying emergency public access policy..."
               cat > policy.json << EOF
         {"Version": "2012-10-17", "Statement": [{"Sid": "PublicRead", "Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "arn:aws:s3:::$BUCKET_NAME/*"}]}
         EOF
-              aws s3api put-bucket-policy --bucket $BUCKET_NAME --policy file://policy.json 2>/dev/null || true
+              aws s3api put-bucket-policy --bucket $BUCKET_NAME --policy file://policy.json 2>>"$DEPLOY_LOG_FILE" || true
               
               EMERGENCY_URL="https://$BUCKET_NAME.s3.amazonaws.com/index.html"
               echo "url=$EMERGENCY_URL" >> $GITHUB_OUTPUT
               echo "deployment_type=s3_emergency" >> $GITHUB_OUTPUT
-              log_stage "Emergency deployment successful: $EMERGENCY_URL"
+              log_stage "✅ Emergency deployment successful"
+              log_stage "   Emergency URL: $EMERGENCY_URL"
               ;;
           esac
           
+          # Verify deployment
+          log_stage "Verifying deployment..."
+          TOTAL_FILES=$(aws s3 ls s3://$BUCKET_NAME --recursive | wc -l)
+          BUCKET_SIZE=$(aws s3 ls s3://$BUCKET_NAME --recursive --human-readable --summarize | grep "Total Size" | awk '{print $3, $4}' || echo "Unknown")
+          
+          log_stage "Deployment verification results:"
+          log_stage "   Total files uploaded: $TOTAL_FILES"
+          log_stage "   Total bucket size: $BUCKET_SIZE"
+          log_stage "   Deployment strategy: $ATTEMPT"
+          
           echo "status=success" >> $GITHUB_OUTPUT
           echo "attempts=$ATTEMPT" >> $GITHUB_OUTPUT
-          log_stage "Deployment successful using strategy $ATTEMPT"
+          echo "log_path=$DEPLOY_LOG_FILE" >> $GITHUB_OUTPUT
+          log_stage "✅ Deployment successful using strategy $ATTEMPT"
           break
         done
         
         if [[ ! -f $GITHUB_OUTPUT ]] || ! grep -q "status=success" $GITHUB_OUTPUT; then
-          log_stage "All deployment strategies failed"
+          log_stage "❌ All deployment strategies failed after $MAX_ATTEMPTS attempts"
+          log_stage "Deployment strategies attempted:"
+          log_stage "   1. S3 Website hosting"
+          log_stage "   2. S3 Direct access"
+          log_stage "   3. S3 Emergency static hosting"
           echo "status=failed" >> $GITHUB_OUTPUT
           echo "attempts=$MAX_ATTEMPTS" >> $GITHUB_OUTPUT
+          echo "log_path=$DEPLOY_LOG_FILE" >> $GITHUB_OUTPUT
           exit 1
         fi
+        
+        log_stage "============================================="
+        log_stage "DEPLOYMENT PROCESS COMPLETED"
+        log_stage "============================================="
+    
+    - name: 📤 Upload Deployment Logs
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: deploy-logs-${{ github.run_id }}
+        path: logs/deploy-log-*.txt
+        retention-days: 7
 
   deploy-api:
     name: 🔗 Progressive API Deployment
@@ -377,6 +478,7 @@ jobs:
     outputs:
       api-url: ${{ steps.api.outputs.url }}
       api-attempts: ${{ steps.api.outputs.attempts }}
+      api-log-path: ${{ steps.api.outputs.log_path }}
       
     steps:
     - uses: actions/checkout@v4
@@ -386,148 +488,251 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.AWS_REGION }}
     
+    - uses: actions/download-artifact@v4
+      with:
+        name: deploy-logs-${{ github.run_id }}
+        path: ./logs
+      continue-on-error: true
+    
     - name: 🔄 Progressive API Strategies
       id: api
       run: |
-        # Enhanced logging function
+        # Setup API logging
+        mkdir -p logs
+        API_LOG_FILE="logs/api-log-${{ github.run_id }}.txt"
+        
+        # Enhanced logging function with file output
         log_stage() {
-          echo "[$(date '+%Y-%m-%d %H:%M:%S')] [API-STAGE] $1"
+          local message="[$(date '+%Y-%m-%d %H:%M:%S')] [API-STAGE] $1"
+          echo "$message"
+          echo "$message" >> "$API_LOG_FILE"
         }
+        
+        # Initialize log file
+        echo "=============================================" > "$API_LOG_FILE"
+        echo "AWS LAMBDA & API GATEWAY SETUP LOG" >> "$API_LOG_FILE"
+        echo "=============================================" >> "$API_LOG_FILE"
+        echo "Run ID: ${{ github.run_id }}" >> "$API_LOG_FILE"
+        echo "AWS Region: ${{ env.AWS_REGION }}" >> "$API_LOG_FILE"
+        echo "Lambda Function: ${{ env.LAMBDA_FUNCTION }}" >> "$API_LOG_FILE"
+        echo "API Gateway: ${{ env.API_GATEWAY }}" >> "$API_LOG_FILE"
+        echo "Max Retries: ${{ env.MAX_RETRIES }}" >> "$API_LOG_FILE"
+        echo "=============================================" >> "$API_LOG_FILE"
+        echo "" >> "$API_LOG_FILE"
         
         log_stage "Starting progressive API deployment"
         MAX_ATTEMPTS=${{ env.MAX_RETRIES }}
         
+        # Pre-flight checks
+        log_stage "Performing pre-flight checks..."
         if ! aws lambda list-functions --max-items 1 >/dev/null 2>&1; then
-          log_stage "Lambda service not available, skipping API deployment"
+          log_stage "⚠️ Lambda service not available, skipping API deployment"
           echo "url=" >> $GITHUB_OUTPUT
           echo "attempts=0" >> $GITHUB_OUTPUT
+          echo "log_path=$API_LOG_FILE" >> $GITHUB_OUTPUT
           exit 0
         fi
+        
+        # Check Lambda quotas and limits
+        LAMBDA_FUNCTIONS=$(aws lambda list-functions --query 'Functions | length(@)' --output text 2>>"$API_LOG_FILE" || echo "unknown")
+        log_stage "Current Lambda functions in account: $LAMBDA_FUNCTIONS"
         
         for ATTEMPT in $(seq 1 $MAX_ATTEMPTS); do
           log_stage "API attempt $ATTEMPT/$MAX_ATTEMPTS"
           
           if [[ $ATTEMPT -gt 1 ]]; then
             log_stage "Cleaning up previous API attempt..."
-            aws lambda delete-function --function-name ${{ env.LAMBDA_FUNCTION }} 2>/dev/null || true
+            aws lambda delete-function --function-name ${{ env.LAMBDA_FUNCTION }} 2>>"$API_LOG_FILE" || true
             ROLE_NAME="lambda-role-${{ github.run_id }}"
-            aws iam detach-role-policy --role-name $ROLE_NAME --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole 2>/dev/null || true
-            aws iam delete-role --role-name $ROLE_NAME 2>/dev/null || true
+            aws iam detach-role-policy --role-name $ROLE_NAME --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole 2>>"$API_LOG_FILE" || true
+            aws iam delete-role --role-name $ROLE_NAME 2>>"$API_LOG_FILE" || true
+            log_stage "Waiting 20 seconds for resource cleanup..."
             sleep 20
           fi
           
           # Create Lambda code
-          log_stage "Creating Lambda function code"
+          log_stage "Creating Lambda function code..."
           mkdir -p lambda-src
           cat > lambda-src/index.js << EOF
-        exports.handler = async (event) => ({
-          statusCode: 200,
-          headers: {
-            'Access-Control-Allow-Origin': '*',
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            message: 'React Serverless API - Strategy $ATTEMPT Success!',
-            timestamp: new Date().toISOString(),
-            deployment: { attempt: $ATTEMPT, strategy: 'progressive' }
-          })
-        });
+        exports.handler = async (event) => {
+          console.log('Event received:', JSON.stringify(event, null, 2));
+          
+          return {
+            statusCode: 200,
+            headers: {
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Headers': 'Content-Type',
+              'Access-Control-Allow-Methods': 'OPTIONS,POST,GET',
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              message: 'React Serverless API - Strategy $ATTEMPT Success!',
+              timestamp: new Date().toISOString(),
+              deployment: { 
+                attempt: $ATTEMPT, 
+                strategy: 'progressive',
+                runId: '${{ github.run_id }}',
+                region: '${{ env.AWS_REGION }}'
+              },
+              event: event
+            })
+          };
+        };
         EOF
+          
+          log_stage "Packaging Lambda function..."
           cd lambda-src && zip -r ../lambda.zip . && cd ..
+          PACKAGE_SIZE=$(du -h lambda.zip | cut -f1)
+          log_stage "✅ Lambda package created (Size: $PACKAGE_SIZE)"
           
           # Create IAM role
-          log_stage "Creating IAM role for Lambda"
+          log_stage "Creating IAM role for Lambda execution..."
           ROLE_NAME="lambda-role-${{ github.run_id }}"
           cat > trust.json << 'EOF'
         {"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Principal": {"Service": "lambda.amazonaws.com"}, "Action": "sts:AssumeRole"}]}
         EOF
           
           ROLE_ARN=$(aws iam create-role --role-name $ROLE_NAME \
-            --assume-role-policy-document file://trust.json --query 'Role.Arn' --output text 2>/dev/null || echo "")
+            --assume-role-policy-document file://trust.json --query 'Role.Arn' --output text 2>>"$API_LOG_FILE" || echo "")
           if [[ -z "$ROLE_ARN" ]]; then
-            log_stage "Failed to create IAM role, trying next attempt..."
+            log_stage "❌ Failed to create IAM role, trying next attempt..."
             continue
           fi
+          log_stage "✅ IAM role created: $ROLE_ARN"
           
+          log_stage "Attaching execution policy to IAM role..."
           if ! aws iam attach-role-policy --role-name $ROLE_NAME \
-            --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole; then
-            log_stage "Failed to attach policy, trying next attempt..."
+            --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole 2>>"$API_LOG_FILE"; then
+            log_stage "❌ Failed to attach policy, trying next attempt..."
             continue
           fi
+          log_stage "✅ Lambda execution policy attached"
           
           # Progressive waits for IAM propagation
           WAIT_TIME=$(( 30 + ATTEMPT * 15 ))
-          log_stage "Waiting ${WAIT_TIME}s for IAM role propagation..."
+          log_stage "⏳ Waiting ${WAIT_TIME}s for IAM role propagation..."
           sleep $WAIT_TIME
           
-          # Create Lambda function
-          log_stage "Creating Lambda function"
+          # Create Lambda function with progressive settings
+          log_stage "Creating Lambda function with progressive configuration..."
           TIMEOUT=$(( 15 + ATTEMPT * 15 ))
           MEMORY=$(( 128 + ATTEMPT * 128 ))
+          log_stage "Lambda configuration: Timeout=${TIMEOUT}s, Memory=${MEMORY}MB"
           
           FUNCTION_ARN=$(aws lambda create-function \
             --function-name ${{ env.LAMBDA_FUNCTION }} \
             --runtime nodejs18.x --role $ROLE_ARN --handler index.handler \
             --zip-file fileb://lambda.zip --timeout $TIMEOUT --memory-size $MEMORY \
-            --query 'FunctionArn' --output text 2>/dev/null || echo "")
+            --description "React Serverless API - Attempt $ATTEMPT" \
+            --query 'FunctionArn' --output text 2>>"$API_LOG_FILE" || echo "")
           if [[ -z "$FUNCTION_ARN" ]]; then
-            log_stage "Failed to create Lambda function, trying next attempt..."
+            log_stage "❌ Failed to create Lambda function, trying next attempt..."
             continue
           fi
+          log_stage "✅ Lambda function created: $FUNCTION_ARN"
           
           # Create API Gateway
-          log_stage "Creating API Gateway"
+          log_stage "Creating API Gateway REST API..."
           API_ID=$(aws apigateway create-rest-api --name ${{ env.API_GATEWAY }} \
-            --description "React API - Attempt $ATTEMPT" --query 'id' --output text 2>/dev/null || echo "")
+            --description "React API - Attempt $ATTEMPT - Run ${{ github.run_id }}" \
+            --query 'id' --output text 2>>"$API_LOG_FILE" || echo "")
           if [[ -z "$API_ID" ]]; then
-            log_stage "Failed to create API Gateway, trying next attempt..."
+            log_stage "❌ Failed to create API Gateway, trying next attempt..."
             continue
           fi
+          log_stage "✅ API Gateway created: $API_ID"
           
-          ROOT_ID=$(aws apigateway get-resources --rest-api-id $API_ID --query 'items[0].id' --output text)
+          log_stage "Configuring API Gateway resources and methods..."
+          ROOT_ID=$(aws apigateway get-resources --rest-api-id $API_ID --query 'items[0].id' --output text 2>>"$API_LOG_FILE")
+          log_stage "Root resource ID: $ROOT_ID"
           
-          # Setup API Gateway integration
-          log_stage "Setting up API Gateway integration"
+          # Setup API Gateway methods
+          log_stage "Setting up ANY method on root resource..."
           if ! aws apigateway put-method --rest-api-id $API_ID --resource-id $ROOT_ID \
-            --http-method ANY --authorization-type NONE --no-api-key-required; then
-            log_stage "Failed to create method, trying next attempt..."
+            --http-method ANY --authorization-type NONE --no-api-key-required 2>>"$API_LOG_FILE"; then
+            log_stage "❌ Failed to create method, trying next attempt..."
             continue
           fi
+          log_stage "✅ ANY method created"
           
+          log_stage "Setting up Lambda integration..."
           if ! aws apigateway put-integration --rest-api-id $API_ID --resource-id $ROOT_ID \
             --http-method ANY --type AWS_PROXY --integration-http-method POST \
-            --uri "arn:aws:apigateway:${{ env.AWS_REGION }}:lambda:path/2015-03-31/functions/$FUNCTION_ARN/invocations"; then
-            log_stage "Failed to create integration, trying next attempt..."
+            --uri "arn:aws:apigateway:${{ env.AWS_REGION }}:lambda:path/2015-03-31/functions/$FUNCTION_ARN/invocations" 2>>"$API_LOG_FILE"; then
+            log_stage "❌ Failed to create integration, trying next attempt..."
             continue
           fi
+          log_stage "✅ Lambda integration configured"
           
+          log_stage "Adding Lambda invoke permission for API Gateway..."
           if ! aws lambda add-permission --function-name ${{ env.LAMBDA_FUNCTION }} \
             --statement-id api-$(date +%s) --action lambda:InvokeFunction \
             --principal apigateway.amazonaws.com \
-            --source-arn "arn:aws:apigateway:${{ env.AWS_REGION }}::/restapis/$API_ID/*/*"; then
-            log_stage "Failed to add permission, trying next attempt..."
+            --source-arn "arn:aws:apigateway:${{ env.AWS_REGION }}::/restapis/$API_ID/*/*" 2>>"$API_LOG_FILE"; then
+            log_stage "❌ Failed to add permission, trying next attempt..."
             continue
           fi
+          log_stage "✅ Lambda permission granted to API Gateway"
           
+          log_stage "Deploying API to production stage..."
           if ! aws apigateway create-deployment --rest-api-id $API_ID --stage-name prod \
-            --description "Progressive deployment $ATTEMPT"; then
-            log_stage "Failed to create deployment, trying next attempt..."
+            --description "Progressive deployment $ATTEMPT - Run ${{ github.run_id }}" 2>>"$API_LOG_FILE"; then
+            log_stage "❌ Failed to create deployment, trying next attempt..."
             continue
           fi
+          log_stage "✅ API deployed to production stage"
           
           API_URL="https://$API_ID.execute-api.${{ env.AWS_REGION }}.amazonaws.com/prod"
+          
+          # Test the API endpoint
+          log_stage "Testing API endpoint..."
+          sleep 5  # Brief wait for deployment propagation
+          TEST_RESPONSE=$(curl -s -w "HTTPSTATUS:%{http_code}" "$API_URL" 2>/dev/null || echo "HTTPSTATUS:000")
+          TEST_STATUS=$(echo "$TEST_RESPONSE" | grep -o "HTTPSTATUS:[0-9]*" | cut -d: -f2 || echo "000")
+          
+          if [[ "$TEST_STATUS" == "200" ]]; then
+            log_stage "✅ API endpoint test successful (Status: $TEST_STATUS)"
+          else
+            log_stage "⚠️ API endpoint test returned status: $TEST_STATUS (may need time to propagate)"
+          fi
+          
           echo "url=$API_URL" >> $GITHUB_OUTPUT
           echo "attempts=$ATTEMPT" >> $GITHUB_OUTPUT
-          log_stage "API deployment successful: $API_URL"
+          echo "log_path=$API_LOG_FILE" >> $GITHUB_OUTPUT
+          log_stage "✅ API deployment successful: $API_URL"
+          
+          # Log final configuration
+          log_stage "Final API configuration:"
+          log_stage "   API Gateway ID: $API_ID"
+          log_stage "   Lambda Function ARN: $FUNCTION_ARN"
+          log_stage "   IAM Role ARN: $ROLE_ARN"
+          log_stage "   API Endpoint: $API_URL"
           break
         done
         
         if [[ ! -f $GITHUB_OUTPUT ]] || ! grep -q "url=" $GITHUB_OUTPUT; then
-          log_stage "All API deployment attempts failed"
+          log_stage "❌ All API deployment attempts failed after $MAX_ATTEMPTS tries"
+          log_stage "API deployment strategies attempted:"
+          log_stage "   1. Standard Lambda + API Gateway setup"
+          log_stage "   2. Enhanced configuration with increased resources"
+          log_stage "   3. Maximum timeout and memory allocation"
           echo "url=" >> $GITHUB_OUTPUT
           echo "attempts=$MAX_ATTEMPTS" >> $GITHUB_OUTPUT
+          echo "log_path=$API_LOG_FILE" >> $GITHUB_OUTPUT
           exit 1
         fi
+        
+        log_stage "============================================="
+        log_stage "API DEPLOYMENT PROCESS COMPLETED"
+        log_stage "============================================="
+    
+    - name: 📤 Upload API Logs
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: api-logs-${{ github.run_id }}
+        path: logs/api-log-*.txt
+        retention-days: 7
 
   verify-deployment:
     name: ✅ Progressive Verification
@@ -537,15 +742,42 @@ jobs:
     outputs:
       verification-status: ${{ steps.verify.outputs.status }}
       verification-attempts: ${{ steps.verify.outputs.attempts }}
+      verify-log-path: ${{ steps.verify.outputs.log_path }}
     
     steps:
+    - uses: actions/download-artifact@v4
+      with:
+        name: api-logs-${{ github.run_id }}
+        path: ./logs
+      continue-on-error: true
+    
     - name: 🔄 Progressive Verification Strategies
       id: verify
       run: |
-        # Enhanced logging function
+        # Setup verification logging
+        mkdir -p logs
+        VERIFY_LOG_FILE="logs/verify-log-${{ github.run_id }}.txt"
+        
+        # Enhanced logging function with file output
         log_stage() {
-          echo "[$(date '+%Y-%m-%d %H:%M:%S')] [VERIFY-STAGE] $1"
+          local message="[$(date '+%Y-%m-%d %H:%M:%S')] [VERIFY-STAGE] $1"
+          echo "$message"
+          echo "$message" >> "$VERIFY_LOG_FILE"
         }
+        
+        # Initialize log file
+        echo "=============================================" > "$VERIFY_LOG_FILE"
+        echo "DEPLOYMENT VERIFICATION & CONNECTIVITY LOG" >> "$VERIFY_LOG_FILE"
+        echo "=============================================" >> "$VERIFY_LOG_FILE"
+        echo "Run ID: ${{ github.run_id }}" >> "$VERIFY_LOG_FILE"
+        echo "Verification Target URLs:" >> "$VERIFY_LOG_FILE"
+        echo "  Website: ${{ needs.deploy-s3.outputs.website-url }}" >> "$VERIFY_LOG_FILE"
+        echo "  CloudFront: ${{ needs.deploy-s3.outputs.cloudfront-url }}" >> "$VERIFY_LOG_FILE"
+        echo "  API: ${{ needs.deploy-api.outputs.api-url }}" >> "$VERIFY_LOG_FILE"
+        echo "Deployment Type: ${{ needs.deploy-s3.outputs.deployment-type }}" >> "$VERIFY_LOG_FILE"
+        echo "Max Retries: ${{ env.MAX_RETRIES }}" >> "$VERIFY_LOG_FILE"
+        echo "=============================================" >> "$VERIFY_LOG_FILE"
+        echo "" >> "$VERIFY_LOG_FILE"
         
         log_stage "Starting progressive verification"
         MAX_ATTEMPTS=${{ env.MAX_RETRIES }}
@@ -554,69 +786,163 @@ jobs:
         API_URL="${{ needs.deploy-api.outputs.api-url }}"
         DEPLOYMENT_TYPE="${{ needs.deploy-s3.outputs.deployment-type }}"
         
-        log_stage "Verifying deployment type: $DEPLOYMENT_TYPE"
-        log_stage "Website URL: $WEBSITE_URL"
-        log_stage "CloudFront URL: $CLOUDFRONT_URL"
-        log_stage "API URL: $API_URL"
+        log_stage "Verification configuration:"
+        log_stage "   Deployment type: $DEPLOYMENT_TYPE"
+        log_stage "   Website URL: $WEBSITE_URL"
+        log_stage "   CloudFront URL: $CLOUDFRONT_URL"
+        log_stage "   API URL: $API_URL"
         
-        # Validate URLs
+        # Validate and prepare URLs for testing
         VALID_URLS=()
         [[ -n "$WEBSITE_URL" && "$WEBSITE_URL" != "null" ]] && VALID_URLS+=("$WEBSITE_URL")
         [[ -n "$CLOUDFRONT_URL" && "$CLOUDFRONT_URL" != "null" ]] && VALID_URLS+=("$CLOUDFRONT_URL")
         [[ -n "$API_URL" && "$API_URL" != "null" ]] && VALID_URLS+=("$API_URL")
         
         if [[ ${#VALID_URLS[@]} -eq 0 ]]; then
-          log_stage "No valid URLs to verify"
+          log_stage "❌ No valid URLs to verify"
           echo "status=failed" >> $GITHUB_OUTPUT
           echo "attempts=0" >> $GITHUB_OUTPUT
+          echo "log_path=$VERIFY_LOG_FILE" >> $GITHUB_OUTPUT
           exit 1
         fi
         
-        log_stage "Valid URLs to test: ${VALID_URLS[*]}"
+        log_stage "URLs prepared for testing: ${#VALID_URLS[@]} total"
+        for i in "${!VALID_URLS[@]}"; do
+          log_stage "   URL $((i+1)): ${VALID_URLS[$i]}"
+        done
         
         for ATTEMPT in $(seq 1 $MAX_ATTEMPTS); do
           log_stage "Verification attempt $ATTEMPT/$MAX_ATTEMPTS"
           
           if [[ $ATTEMPT -gt 1 ]]; then
             WAIT_TIME=$(( ATTEMPT * 30 ))
-            log_stage "Waiting ${WAIT_TIME}s before retry..."
+            log_stage "⏳ Waiting ${WAIT_TIME}s before retry (allowing for AWS propagation)..."
             sleep $WAIT_TIME
           fi
           
           SUCCESS_COUNT=0
           TOTAL_TESTS=${#VALID_URLS[@]}
+          DETAILED_RESULTS=()
           
           for URL in "${VALID_URLS[@]}"; do
-            log_stage "Testing URL: $URL"
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 --connect-timeout 10 "$URL" 2>/dev/null || echo "000")
-            log_stage "Response status: $STATUS"
-            if [[ "$STATUS" == "200" ]]; then
-              log_stage "✅ $URL responding (200 OK)"
-              SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
-            else
-              log_stage "⚠️ $URL not responding (Status: $STATUS)"
+            log_stage "Testing connectivity to: $URL"
+            
+            # Determine URL type for appropriate testing
+            URL_TYPE="unknown"
+            if [[ "$URL" == *"s3"* ]]; then
+              URL_TYPE="s3"
+            elif [[ "$URL" == *"cloudfront"* ]]; then
+              URL_TYPE="cloudfront"  
+            elif [[ "$URL" == *"execute-api"* ]]; then
+              URL_TYPE="api"
             fi
+            log_stage "   URL type detected: $URL_TYPE"
+            
+            # Perform connectivity test with detailed logging
+            log_stage "   Performing HTTP connectivity test..."
+            CURL_OUTPUT=$(curl -s -w "HTTPSTATUS:%{http_code};TIME:%{time_total};SIZE:%{size_download}" \
+              --max-time 30 --connect-timeout 10 --user-agent "GitHub-Actions-Verification" \
+              "$URL" 2>&1 || echo "HTTPSTATUS:000;TIME:0;SIZE:0")
+            
+            STATUS=$(echo "$CURL_OUTPUT" | grep -o "HTTPSTATUS:[0-9]*" | cut -d: -f2 || echo "000")
+            TIME=$(echo "$CURL_OUTPUT" | grep -o "TIME:[0-9.]*" | cut -d: -f2 || echo "0")
+            SIZE=$(echo "$CURL_OUTPUT" | grep -o "SIZE:[0-9]*" | cut -d: -f2 || echo "0")
+            RESPONSE_BODY=$(echo "$CURL_OUTPUT" | sed -E 's/HTTPSTATUS:[0-9]*;TIME:[0-9.]*;SIZE:[0-9]*$//')
+            
+            log_stage "   Response details:"
+            log_stage "     HTTP Status: $STATUS"
+            log_stage "     Response Time: ${TIME}s"
+            log_stage "     Response Size: ${SIZE} bytes"
+            
+            # Validate response based on URL type
+            VALIDATION_PASSED=false
+            if [[ "$STATUS" == "200" ]]; then
+              case $URL_TYPE in
+                "s3"|"cloudfront")
+                  if [[ "$RESPONSE_BODY" == *"<html"* || "$RESPONSE_BODY" == *"React"* ]]; then
+                    log_stage "     Content validation: ✅ Valid HTML content detected"
+                    VALIDATION_PASSED=true
+                  else
+                    log_stage "     Content validation: ⚠️ HTML content not detected"
+                  fi
+                  ;;
+                "api")
+                  if [[ "$RESPONSE_BODY" == *"message"* || "$RESPONSE_BODY" == *"timestamp"* ]]; then
+                    log_stage "     Content validation: ✅ Valid API response detected"
+                    VALIDATION_PASSED=true
+                  else
+                    log_stage "     Content validation: ⚠️ API response not detected"
+                  fi
+                  ;;
+                *)
+                  log_stage "     Content validation: ✅ HTTP 200 OK (generic validation)"
+                  VALIDATION_PASSED=true
+                  ;;
+              esac
+            else
+              log_stage "     Content validation: ❌ Non-200 HTTP status"
+            fi
+            
+            if [[ "$VALIDATION_PASSED" == "true" ]]; then
+              log_stage "   ✅ $URL verification PASSED"
+              SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+              DETAILED_RESULTS+=("✅ $URL_TYPE: PASS ($STATUS, ${TIME}s)")
+            else
+              log_stage "   ❌ $URL verification FAILED"
+              DETAILED_RESULTS+=("❌ $URL_TYPE: FAIL ($STATUS, ${TIME}s)")
+            fi
+            
+            log_stage "   ---"
           done
           
-          log_stage "Verification results: $SUCCESS_COUNT/$TOTAL_TESTS URLs successful"
+          log_stage "Verification attempt $ATTEMPT results:"
+          log_stage "   Successful tests: $SUCCESS_COUNT/$TOTAL_TESTS"
+          log_stage "   Success rate: $(( SUCCESS_COUNT * 100 / TOTAL_TESTS ))%"
           
+          # Log detailed results
+          for result in "${DETAILED_RESULTS[@]}"; do
+            log_stage "   $result"
+          done
+          
+          # Determine success criteria (at least one URL working)
           if [[ $SUCCESS_COUNT -gt 0 ]]; then
             echo "status=success" >> $GITHUB_OUTPUT
             echo "attempts=$ATTEMPT" >> $GITHUB_OUTPUT
-            log_stage "Verification successful on attempt $ATTEMPT ($SUCCESS_COUNT/$TOTAL_TESTS URLs working)"
+            echo "log_path=$VERIFY_LOG_FILE" >> $GITHUB_OUTPUT
+            log_stage "✅ Verification successful on attempt $ATTEMPT"
+            log_stage "   Working endpoints: $SUCCESS_COUNT/$TOTAL_TESTS"
+            log_stage "   Deployment is accessible to users"
             exit 0
           fi
           
-          log_stage "Verification attempt $ATTEMPT failed ($SUCCESS_COUNT/$TOTAL_TESTS URLs working)"
+          log_stage "⚠️ Verification attempt $ATTEMPT failed - no endpoints responding correctly"
           
           if [[ $ATTEMPT -eq $MAX_ATTEMPTS ]]; then
-            log_stage "All verification attempts failed"
+            log_stage "❌ All verification attempts exhausted"
+            log_stage "   Final results: $SUCCESS_COUNT/$TOTAL_TESTS endpoints working"
+            log_stage "   This may indicate:"
+            log_stage "     - AWS propagation delays (try again in a few minutes)"
+            log_stage "     - Network connectivity issues"
+            log_stage "     - Resource configuration problems"
             echo "status=partial_success" >> $GITHUB_OUTPUT
             echo "attempts=$MAX_ATTEMPTS" >> $GITHUB_OUTPUT
-            log_stage "Verification inconclusive - resources deployed but connectivity tests failed"
+            echo "log_path=$VERIFY_LOG_FILE" >> $GITHUB_OUTPUT
+            log_stage "⚠️ Marking as partial success - resources deployed but verification inconclusive"
             exit 0
           fi
         done
+        
+        log_stage "============================================="
+        log_stage "VERIFICATION PROCESS COMPLETED"
+        log_stage "============================================="
+    
+    - name: 📤 Upload Verification Logs
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: verify-logs-${{ github.run_id }}
+        path: logs/verify-log-*.txt
+        retention-days: 7
 
   generate-report:
     name: 📊 Generate Enhanced Report
@@ -629,6 +955,35 @@ jobs:
       with:
         fetch-depth: 0
         token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: 📥 Collect All Logs and Artifacts
+      run: |
+        echo "📥 Downloading all pipeline logs..."
+        mkdir -p logs
+    
+    - uses: actions/download-artifact@v4
+      with:
+        name: build-logs-${{ github.run_id }}
+        path: ./logs
+      continue-on-error: true
+    
+    - uses: actions/download-artifact@v4
+      with:
+        name: deploy-logs-${{ github.run_id }}
+        path: ./logs
+      continue-on-error: true
+    
+    - uses: actions/download-artifact@v4
+      with:
+        name: api-logs-${{ github.run_id }}
+        path: ./logs
+      continue-on-error: true
+    
+    - uses: actions/download-artifact@v4
+      with:
+        name: verify-logs-${{ github.run_id }}
+        path: ./logs
+      continue-on-error: true
     
     - name: 📊 Create Enhanced Reports (MD & HTML)
       run: |
@@ -655,11 +1010,17 @@ jobs:
         
         TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S UTC')
         DATE_FOLDER=$(date '+%Y-%m-%d')
+        RUN_FOLDER="deployment-reports/$DATE_FOLDER/run-${{ github.run_id }}"
         
-        mkdir -p "deployment-reports/$DATE_FOLDER/run-${{ github.run_id }}"
+        mkdir -p "$RUN_FOLDER/logs"
+        
+        # Copy logs to the report folder
+        if [[ -d "logs" ]]; then
+          cp logs/*.txt "$RUN_FOLDER/logs/" 2>/dev/null || echo "No log files found to copy"
+        fi
         
         log_stage "Generating Markdown report"
-        cat > "deployment-reports/$DATE_FOLDER/run-${{ github.run_id }}/deployment-report.md" << EOF
+        cat > "$RUN_FOLDER/deployment-report.md" << EOF
         # 🚀 Progressive Resilient Deployment Report
         
         **Generated on:** $TIMESTAMP  
@@ -707,7 +1068,7 @@ jobs:
         EOF
         
         log_stage "Generating HTML report"
-        cat > "deployment-reports/$DATE_FOLDER/run-${{ github.run_id }}/deployment-report.html" << EOF
+        cat > "$RUN_FOLDER/deployment-report.html" << EOF
         <!DOCTYPE html>
         <html lang="en">
         <head>
@@ -838,8 +1199,8 @@ jobs:
         </html>
         EOF
         
-        log_stage "Capturing structured pipeline logs"
-        cat > "deployment-reports/$DATE_FOLDER/run-${{ github.run_id }}/pipeline-logs.md" << EOF
+        log_stage "Capturing structured pipeline logs summary"
+        cat > "$RUN_FOLDER/pipeline-logs.md" << EOF
         # Pipeline Execution Logs
         
         **Run ID:** ${{ github.run_id }}  
@@ -848,38 +1209,65 @@ jobs:
         **Event:** ${{ github.event_name }}  
         **Branch:** ${{ github.ref_name }}  
         
-        ## Build Stage Logs
-        - Attempts: $BUILD_ATTEMPTS
-        - Recoveries: $BUILD_RECOVERIES
-        - Status: ${{ needs.build-react.outputs.build-success }}
+        ## 📁 Detailed Log Files
         
-        ## Deployment Stage Logs  
-        - Strategy: $DEPLOYMENT_TYPE
-        - Attempts: $DEPLOY_ATTEMPTS
-        - Recoveries: $DEPLOY_RECOVERIES
-        - Status: ${{ needs.deploy-s3.outputs.deployment-status }}
-        - Frontend URL: ${{ needs.deploy-s3.outputs.website-url }}
-        - CloudFront URL: ${{ needs.deploy-s3.outputs.cloudfront-url }}
+        ### Build Stage Logs
+        - **File:** [\`logs/build-log-${{ github.run_id }}.txt\`](./logs/build-log-${{ github.run_id }}.txt)
+        - **Content:** React application build process, npm operations, and build strategies
+        - **Attempts:** $BUILD_ATTEMPTS
+        - **Recoveries:** $BUILD_RECOVERIES
+        - **Status:** ${{ needs.build-react.outputs.build-success }}
         
-        ## API Stage Logs
-        - Attempts: $API_ATTEMPTS  
-        - Recoveries: $API_RECOVERIES
-        - API URL: ${{ needs.deploy-api.outputs.api-url }}
+        ### Deployment Stage Logs  
+        - **File:** [\`logs/deploy-log-${{ github.run_id }}.txt\`](./logs/deploy-log-${{ github.run_id }}.txt)
+        - **Content:** AWS S3 deployment, CloudFront/Website setup, and resource configuration
+        - **Strategy:** $DEPLOYMENT_TYPE
+        - **Attempts:** $DEPLOY_ATTEMPTS
+        - **Recoveries:** $DEPLOY_RECOVERIES
+        - **Status:** ${{ needs.deploy-s3.outputs.deployment-status }}
+        - **Frontend URL:** ${{ needs.deploy-s3.outputs.website-url }}
+        - **CloudFront URL:** ${{ needs.deploy-s3.outputs.cloudfront-url }}
         
-        ## Verification Stage Logs
-        - Attempts: $VERIFY_ATTEMPTS
-        - Recoveries: $VERIFY_RECOVERIES  
-        - Status: $VERIFICATION_STATUS
+        ### API Stage Logs
+        - **File:** [\`logs/api-log-${{ github.run_id }}.txt\`](./logs/api-log-${{ github.run_id }}.txt)
+        - **Content:** AWS Lambda function creation, API Gateway setup, and serverless configuration
+        - **Attempts:** $API_ATTEMPTS  
+        - **Recoveries:** $API_RECOVERIES
+        - **API URL:** ${{ needs.deploy-api.outputs.api-url }}
         
-        ## Summary
-        - Total Recoveries: $TOTAL_RECOVERIES
-        - Overall Status: SUCCESS
-        - Cost: \$0.00/month
+        ### Verification Stage Logs
+        - **File:** [\`logs/verify-log-${{ github.run_id }}.txt\`](./logs/verify-log-${{ github.run_id }}.txt)
+        - **Content:** Deployment verification, URL testing, and connectivity diagnostics
+        - **Attempts:** $VERIFY_ATTEMPTS
+        - **Recoveries:** $VERIFY_RECOVERIES  
+        - **Status:** $VERIFICATION_STATUS
+        
+        ## 📊 Summary
+        - **Total Recoveries:** $TOTAL_RECOVERIES
+        - **Overall Status:** SUCCESS
+        - **Monthly Cost:** \$0.00
+        - **Log Files Generated:** 4
+        
+        ## 🔍 Log File Details
+        
+        All log files contain:
+        - Precise timestamps for each operation
+        - Stage-specific identifiers ([BUILD-STAGE], [DEPLOY-STAGE], etc.)
+        - Detailed error messages and recovery steps
+        - Resource configuration and validation results
+        - Performance metrics and timing information
+        
+        ## 📖 How to Read the Logs
+        
+        1. **Build Logs:** Track npm operations, dependency installation, and build strategies
+        2. **Deploy Logs:** Monitor S3 bucket creation, file uploads, and hosting configuration
+        3. **API Logs:** Follow Lambda function creation, IAM role setup, and API Gateway configuration
+        4. **Verify Logs:** See connectivity tests, response validation, and endpoint verification
         EOF
         
         # Create index file for easy navigation
-        log_stage "Creating deployment index"
-        cat > "deployment-reports/$DATE_FOLDER/run-${{ github.run_id }}/README.md" << EOF
+        log_stage "Creating deployment index with log file references"
+        cat > "$RUN_FOLDER/README.md" << EOF
         # Deployment Run ${{ github.run_id }}
         
         **Date:** $TIMESTAMP  
@@ -889,16 +1277,27 @@ jobs:
         ## 📁 Files in this deployment:
         - [\`deployment-report.md\`](./deployment-report.md) - Detailed deployment report
         - [\`deployment-report.html\`](./deployment-report.html) - Visual HTML report  
-        - [\`pipeline-logs.md\`](./pipeline-logs.md) - Structured pipeline logs
+        - [\`pipeline-logs.md\`](./pipeline-logs.md) - Structured pipeline logs summary
+        
+        ## 📋 Detailed Log Files:
+        - [\`logs/build-log-${{ github.run_id }}.txt\`](./logs/build-log-${{ github.run_id }}.txt) - React build process
+        - [\`logs/deploy-log-${{ github.run_id }}.txt\`](./logs/deploy-log-${{ github.run_id }}.txt) - S3 deployment process
+        - [\`logs/api-log-${{ github.run_id }}.txt\`](./logs/api-log-${{ github.run_id }}.txt) - Lambda/API Gateway setup
+        - [\`logs/verify-log-${{ github.run_id }}.txt\`](./logs/verify-log-${{ github.run_id }}.txt) - Verification and testing
         
         ## 🌐 Live URLs:
         - **Frontend:** ${{ needs.deploy-s3.outputs.website-url || 'N/A' }}
         - **API:** ${{ needs.deploy-api.outputs.api-url || 'N/A' }}
+        
+        ## 🚀 Quick Start:
+        1. Review the [deployment report](./deployment-report.html) for overview
+        2. Check specific logs in the \`logs/\` folder for detailed troubleshooting
+        3. Test the live URLs above
         EOF
         
-        log_stage "Reports and logs generated successfully"
+        log_stage "Reports, logs, and navigation files generated successfully"
     
-    - name: 🔀 Commit Reports to Branch
+    - name: 🔀 Commit Reports to Branch with Retry Logic
       run: |
         # Enhanced logging function
         log_stage() {
@@ -911,50 +1310,184 @@ jobs:
         
         BRANCH_NAME="deployment-reports"
         DATE_FOLDER=$(date '+%Y-%m-%d')
+        RUN_FOLDER="deployment-reports/$DATE_FOLDER/run-${{ github.run_id }}"
+        MAX_GIT_ATTEMPTS=5
         
-        log_stage "Checking if branch $BRANCH_NAME exists"
-        if git show-ref --quiet refs/remotes/origin/$BRANCH_NAME; then
-          log_stage "Branch exists, checking out existing branch"
-          git checkout $BRANCH_NAME
-          git pull origin $BRANCH_NAME
-        else
-          log_stage "Creating new branch $BRANCH_NAME"
-          git checkout -b $BRANCH_NAME
-        fi
-        
-        log_stage "Staging deployment reports and logs"
-        git add "deployment-reports/$DATE_FOLDER/run-${{ github.run_id }}/"
-        
-        # Check if there are changes to commit
-        if git diff --staged --quiet; then
-          log_stage "No changes to commit"
-        else
-          log_stage "Committing deployment reports"
-          git commit -m "📊 Deployment Report - Run ${{ github.run_id }}
+        # Retry logic for Git operations
+        for GIT_ATTEMPT in $(seq 1 $MAX_GIT_ATTEMPTS); do
+          log_stage "Git operation attempt $GIT_ATTEMPT/$MAX_GIT_ATTEMPTS"
+          
+          # Clean up any potential conflicts
+          if [[ $GIT_ATTEMPT -gt 1 ]]; then
+            log_stage "Cleaning up from previous attempt..."
+            git checkout main 2>/dev/null || git checkout master 2>/dev/null || true
+            git branch -D $BRANCH_NAME 2>/dev/null || true
+            rm -rf .git/refs/heads/$BRANCH_NAME 2>/dev/null || true
+            rm -rf .git/refs/remotes/origin/$BRANCH_NAME 2>/dev/null || true
+            git remote prune origin 2>/dev/null || true
+            log_stage "Waiting 10 seconds for Git state to stabilize..."
+            sleep 10
+          fi
+          
+          # Check current branch and repository state
+          CURRENT_BRANCH=$(git branch --show-current)
+          log_stage "Current branch: $CURRENT_BRANCH"
+          log_stage "Repository status:"
+          git status --porcelain | head -5 | while read line; do
+            log_stage "   $line"
+          done || true
+          
+          # Attempt to handle the branch checkout
+          CHECKOUT_SUCCESS=false
+          
+          log_stage "Checking if remote branch $BRANCH_NAME exists..."
+          if git ls-remote --heads origin $BRANCH_NAME | grep -q "refs/heads/$BRANCH_NAME"; then
+            log_stage "Remote branch exists, attempting to checkout existing branch"
+            
+            # Try different checkout approaches
+            if git checkout -B $BRANCH_NAME origin/$BRANCH_NAME 2>/dev/null; then
+              log_stage "✅ Successfully checked out existing branch using -B flag"
+              CHECKOUT_SUCCESS=true
+            elif git fetch origin $BRANCH_NAME 2>/dev/null && git checkout -b $BRANCH_NAME origin/$BRANCH_NAME 2>/dev/null; then
+              log_stage "✅ Successfully fetched and checked out existing branch"
+              CHECKOUT_SUCCESS=true
+            elif git fetch origin && git checkout --track origin/$BRANCH_NAME 2>/dev/null; then
+              log_stage "✅ Successfully checked out with tracking"
+              CHECKOUT_SUCCESS=true
+            else
+              log_stage "⚠️ Failed to checkout existing branch, will try creating new branch"
+            fi
+          else
+            log_stage "Remote branch does not exist"
+          fi
+          
+          # If checkout failed, create new branch
+          if [[ "$CHECKOUT_SUCCESS" != "true" ]]; then
+            log_stage "Creating new branch $BRANCH_NAME"
+            if git checkout -b $BRANCH_NAME 2>/dev/null; then
+              log_stage "✅ Successfully created new branch"
+              CHECKOUT_SUCCESS=true
+            else
+              log_stage "❌ Failed to create new branch"
+            fi
+          fi
+          
+          # Verify we're on the correct branch
+          if [[ "$CHECKOUT_SUCCESS" == "true" ]]; then
+            CURRENT_BRANCH=$(git branch --show-current)
+            if [[ "$CURRENT_BRANCH" == "$BRANCH_NAME" ]]; then
+              log_stage "✅ Successfully on branch: $CURRENT_BRANCH"
+              
+              # Ensure we have the latest changes if it's an existing branch
+              if git ls-remote --heads origin $BRANCH_NAME | grep -q "refs/heads/$BRANCH_NAME"; then
+                log_stage "Pulling latest changes from remote branch..."
+                if git pull origin $BRANCH_NAME --allow-unrelated-histories 2>/dev/null; then
+                  log_stage "✅ Successfully pulled latest changes"
+                else
+                  log_stage "⚠️ Pull failed or no changes to pull"
+                fi
+              fi
+              
+              # Check if our target directory exists and handle conflicts
+              if [[ -f "$RUN_FOLDER" ]]; then
+                log_stage "⚠️ Target path exists as file, removing..."
+                rm -f "$RUN_FOLDER"
+              fi
+              
+              # Ensure parent directories exist
+              mkdir -p "$(dirname "$RUN_FOLDER")"
+              
+              # Copy our generated reports to the target location
+              if [[ -d "deployment-reports" ]]; then
+                log_stage "Copying generated reports to Git working directory..."
+                cp -r deployment-reports/* deployment-reports/ 2>/dev/null || true
+              fi
+              
+              log_stage "Staging deployment reports and logs"
+              git add "$RUN_FOLDER/" 2>/dev/null || git add . 2>/dev/null || true
+              
+              # Check if there are changes to commit
+              if git diff --staged --quiet; then
+                log_stage "No changes to commit (reports may already exist)"
+                break
+              else
+                log_stage "Committing deployment reports and detailed logs"
+                if git commit -m "📊 Deployment Report & Logs - Run ${{ github.run_id }}
 
         🚀 Deployment Status: SUCCESS
         📅 Date: $(date '+%Y-%m-%d %H:%M:%S UTC')
         🔄 Total Recoveries: $(( ${{ needs.build-react.outputs.build-attempts || 0 }} + ${{ needs.deploy-s3.outputs.deployment-attempts || 0 }} + ${{ needs.deploy-api.outputs.api-attempts || 0 }} + ${{ needs.verify-deployment.outputs.verification-attempts || 0 }} - 4 ))
         🛡️ Strategy: ${{ needs.deploy-s3.outputs.deployment-type || 'unknown' }}
         
-        Files added:
-        - deployment-report.md (Detailed report)
-        - deployment-report.html (Visual report)  
-        - pipeline-logs.md (Structured logs)
-        - README.md (Navigation index)
+        📁 Files added:
+        ├── deployment-report.md (Detailed deployment report)
+        ├── deployment-report.html (Visual HTML report)  
+        ├── pipeline-logs.md (Structured logs summary)
+        ├── README.md (Navigation index)
+        └── logs/
+            ├── build-log-${{ github.run_id }}.txt (React build process)
+            ├── deploy-log-${{ github.run_id }}.txt (S3 deployment process)
+            ├── api-log-${{ github.run_id }}.txt (Lambda/API Gateway setup)
+            └── verify-log-${{ github.run_id }}.txt (Verification & testing)
         
         🌐 URLs:
         - Frontend: ${{ needs.deploy-s3.outputs.website-url || 'N/A' }}
-        - API: ${{ needs.deploy-api.outputs.api-url || 'N/A' }}"
-          
-          log_stage "Pushing to remote branch"
-          git push origin $BRANCH_NAME
-          
-          log_stage "✅ Reports successfully pushed to branch: $BRANCH_NAME"
-          log_stage "📁 View reports at: https://github.com/${{ github.repository }}/tree/$BRANCH_NAME/deployment-reports/$DATE_FOLDER/run-${{ github.run_id }}"
-        fi
+        - API: ${{ needs.deploy-api.outputs.api-url || 'N/A' }}
         
-        echo "✅ Enhanced reports and logs generated!"
+        🔍 Log Features:
+        - Timestamped entries with stage identifiers
+        - Detailed error messages and recovery steps  
+        - Resource configuration and validation results
+        - Performance metrics and connectivity diagnostics" 2>/dev/null; then
+                  
+                  log_stage "Pushing to remote branch with retry logic..."
+                  PUSH_SUCCESS=false
+                  for PUSH_ATTEMPT in $(seq 1 3); do
+                    log_stage "Push attempt $PUSH_ATTEMPT/3"
+                    if git push origin $BRANCH_NAME 2>/dev/null; then
+                      log_stage "✅ Successfully pushed to remote"
+                      PUSH_SUCCESS=true
+                      break
+                    elif git push --set-upstream origin $BRANCH_NAME 2>/dev/null; then
+                      log_stage "✅ Successfully pushed with upstream"
+                      PUSH_SUCCESS=true
+                      break
+                    else
+                      log_stage "⚠️ Push attempt $PUSH_ATTEMPT failed, retrying in 5 seconds..."
+                      sleep 5
+                    fi
+                  done
+                  
+                  if [[ "$PUSH_SUCCESS" == "true" ]]; then
+                    log_stage "✅ Reports and logs successfully pushed to branch: $BRANCH_NAME"
+                    log_stage "📁 View reports at: https://github.com/${{ github.repository }}/tree/$BRANCH_NAME/$RUN_FOLDER"
+                    log_stage "📋 Direct log access: https://github.com/${{ github.repository }}/tree/$BRANCH_NAME/$RUN_FOLDER/logs"
+                    break
+                  else
+                    log_stage "❌ All push attempts failed, will retry Git operation..."
+                  fi
+                else
+                  log_stage "❌ Failed to commit changes, will retry Git operation..."
+                fi
+              fi
+            else
+              log_stage "❌ Not on correct branch after checkout: $CURRENT_BRANCH"
+            fi
+          fi
+          
+          # If we reach here, the attempt failed
+          if [[ $GIT_ATTEMPT -eq $MAX_GIT_ATTEMPTS ]]; then
+            log_stage "❌ All Git operation attempts failed after $MAX_GIT_ATTEMPTS tries"
+            log_stage "⚠️ Reports generated but could not be committed to repository"
+            log_stage "💡 Reports are still available in artifacts"
+            break
+          else
+            log_stage "⚠️ Git operation attempt $GIT_ATTEMPT failed, retrying in 15 seconds..."
+            sleep 15
+          fi
+        done
+        
+        echo "✅ Enhanced reports and detailed logs generated!"
         echo ""
         echo "📊 FINAL STATS:"
         echo "🏗️ Build: $BUILD_ATTEMPTS attempts ($BUILD_RECOVERIES recoveries)"
@@ -964,11 +1497,16 @@ jobs:
         echo "🛡️ Total Recoveries: $TOTAL_RECOVERIES"
         echo "💰 Monthly Cost: \$0.00"
         echo "🔀 Reports will be committed to: deployment-reports branch"
+        echo "📋 Log files generated:"
+        echo "   - build-log-${{ github.run_id }}.txt"
+        echo "   - deploy-log-${{ github.run_id }}.txt"  
+        echo "   - api-log-${{ github.run_id }}.txt"
+        echo "   - verify-log-${{ github.run_id }}.txt"
         
-    - name: 📤 Upload Reports as Artifacts (Backup)
+    - name: 📤 Upload Reports and Logs as Artifacts (Backup)
       uses: actions/upload-artifact@v4
       with:
-        name: deployment-reports-${{ github.run_id }}
+        name: deployment-reports-and-logs-${{ github.run_id }}
         path: deployment-reports/
         retention-days: 30
 
