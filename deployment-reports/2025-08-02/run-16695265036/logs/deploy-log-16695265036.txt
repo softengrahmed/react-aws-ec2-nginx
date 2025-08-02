@@ -1,0 +1,46 @@
+=============================================
+AWS S3 DEPLOYMENT PROCESS LOG
+=============================================
+Run ID: 16695265036
+AWS Region: us-east-1
+S3 Bucket: react-serverless-16695265036
+Max Retries: 3
+=============================================
+
+[2025-08-02 15:53:13] [DEPLOY-STAGE] Starting progressive deployment process
+[2025-08-02 15:53:13] [DEPLOY-STAGE] Performing pre-flight checks...
+[2025-08-02 15:53:17] [DEPLOY-STAGE] Pre-flight results:
+[2025-08-02 15:53:17] [DEPLOY-STAGE]    CloudFront available: false
+[2025-08-02 15:53:17] [DEPLOY-STAGE]    AWS Account ID: 073651099697
+[2025-08-02 15:53:17] [DEPLOY-STAGE]    AWS Region: us-east-1
+[2025-08-02 15:53:17] [DEPLOY-STAGE]    Target bucket: react-serverless-16695265036
+[2025-08-02 15:53:18] [DEPLOY-STAGE] Build artifacts verification:
+[2025-08-02 15:53:18] [DEPLOY-STAGE]    Build directory: ✅ exists
+[2025-08-02 15:53:18] [DEPLOY-STAGE]    Index.html: ✅ exists
+[2025-08-02 15:53:18] [DEPLOY-STAGE]    Build size: 224K
+[2025-08-02 15:53:18] [DEPLOY-STAGE]    Total files: 12
+[2025-08-02 15:53:18] [DEPLOY-STAGE] Deploy attempt 1/3
+[2025-08-02 15:53:18] [DEPLOY-STAGE] Creating S3 bucket: react-serverless-16695265036
+[2025-08-02 15:53:18] [DEPLOY-STAGE] ✅ S3 bucket created successfully
+[2025-08-02 15:53:18] [DEPLOY-STAGE] Uploading static assets (CSS, JS, images)...
+[2025-08-02 15:53:20] [DEPLOY-STAGE] ✅ Static assets uploaded successfully (9 files)
+[2025-08-02 15:53:20] [DEPLOY-STAGE] Uploading HTML and JSON files...
+[2025-08-02 15:53:21] [DEPLOY-STAGE] ✅ HTML/JSON files uploaded successfully (3 files)
+[2025-08-02 15:53:21] [DEPLOY-STAGE] Strategy 1: S3 Website deployment
+[2025-08-02 15:53:21] [DEPLOY-STAGE] Removing public access block...
+[2025-08-02 15:53:22] [DEPLOY-STAGE] ✅ Public access block removed
+[2025-08-02 15:53:22] [DEPLOY-STAGE] Configuring website hosting...
+[2025-08-02 15:53:23] [DEPLOY-STAGE] ✅ Website hosting configured
+[2025-08-02 15:53:23] [DEPLOY-STAGE] Setting bucket policy for public read access...
+[2025-08-02 15:53:23] [DEPLOY-STAGE] ✅ Bucket policy applied successfully
+[2025-08-02 15:53:23] [DEPLOY-STAGE] ✅ S3 Website deployment successful
+[2025-08-02 15:53:23] [DEPLOY-STAGE]    Website URL: http://react-serverless-16695265036.s3-website-us-east-1.amazonaws.com
+[2025-08-02 15:53:23] [DEPLOY-STAGE] Verifying deployment...
+[2025-08-02 15:53:25] [DEPLOY-STAGE] Deployment verification results:
+[2025-08-02 15:53:25] [DEPLOY-STAGE]    Total files uploaded: 12
+[2025-08-02 15:53:25] [DEPLOY-STAGE]    Total bucket size: 170.1 KiB
+[2025-08-02 15:53:25] [DEPLOY-STAGE]    Deployment strategy: 1
+[2025-08-02 15:53:25] [DEPLOY-STAGE] ✅ Deployment successful using strategy 1
+[2025-08-02 15:53:25] [DEPLOY-STAGE] =============================================
+[2025-08-02 15:53:25] [DEPLOY-STAGE] DEPLOYMENT PROCESS COMPLETED
+[2025-08-02 15:53:25] [DEPLOY-STAGE] =============================================
