@@ -15,6 +15,11 @@ on:
         description: 'Max retry attempts'
         required: false
         default: '3'
+      cleanup_after_deploy:
+        description: 'Cleanup resources after deployment (demo mode)'
+        required: false
+        default: false
+        type: boolean
 
 env:
   AWS_REGION: us-east-1
@@ -27,6 +32,7 @@ env:
 permissions:
   contents: write
   actions: read
+  pull-requests: write
 
 jobs:
   build-react:
@@ -35,6 +41,7 @@ jobs:
     outputs:
       build-success: ${{ steps.build.outputs.success }}
       build-attempts: ${{ steps.build.outputs.attempts }}
+      build-log-path: ${{ steps.build.outputs.log_path }}
       
     steps:
     - uses: actions/checkout@v4
@@ -46,10 +53,29 @@ jobs:
     - name: 🔄 Progressive Build Strategies
       id: build
       run: |
-        # Enhanced logging function
+        # Create logs directory and setup logging
+        mkdir -p logs
+        BUILD_LOG_FILE="logs/build-log-${{ github.run_id }}.txt"
+        
+        # Enhanced logging function with file output
         log_stage() {
-          echo "[$(date '+%Y-%m-%d %H:%M:%S')] [BUILD-STAGE] $1"
+          local message="[$(date '+%Y-%m-%d %H:%M:%S')] [BUILD-STAGE] $1"
+          echo "$message"
+          echo "$message" >> "$BUILD_LOG_FILE"
         }
+        
+        # Initialize log file
+        echo "=============================================" > "$BUILD_LOG_FILE"
+        echo "REACT APPLICATION BUILD PROCESS LOG" >> "$BUILD_LOG_FILE"
+        echo "=============================================" >> "$BUILD_LOG_FILE"
+        echo "Run ID: ${{ github.run_id }}" >> "$BUILD_LOG_FILE"
+        echo "Workflow: ${{ github.workflow }}" >> "$BUILD_LOG_FILE"
+        echo "Event: ${{ github.event_name }}" >> "$BUILD_LOG_FILE"
+        echo "Branch: ${{ github.ref_name }}" >> "$BUILD_LOG_FILE"
+        echo "Node Version: ${{ env.NODE_VERSION }}" >> "$BUILD_LOG_FILE"
+        echo "Max Retries: ${{ env.MAX_RETRIES }}" >> "$BUILD_LOG_FILE"
+        echo "=============================================" >> "$BUILD_LOG_FILE"
+        echo "" >> "$BUILD_LOG_FILE"
         
         log_stage "Starting progressive build process"
         MAX_ATTEMPTS=${{ env.MAX_RETRIES }}
@@ -60,53 +86,140 @@ jobs:
           case $ATTEMPT in
             1) # Standard build
               log_stage "Strategy 1: Standard clean build"
+              log_stage "Cleaning previous build artifacts..."
               rm -rf build/ node_modules/.cache/ || true
-              npm ci --no-audit --prefer-offline && \
-              echo "GENERATE_SOURCEMAP=false" > .env.production && \
-              npm run build
+              
+              log_stage "Installing npm dependencies (ci mode)..."
+              if npm ci --no-audit --prefer-offline >> "$BUILD_LOG_FILE" 2>&1; then
+                log_stage "✅ npm ci completed successfully"
+              else
+                log_stage "❌ npm ci failed"
+                continue
+              fi
+              
+              log_stage "Setting production environment..."
+              echo "GENERATE_SOURCEMAP=false" > .env.production
+              log_stage "Environment configuration: GENERATE_SOURCEMAP=false"
+              
+              log_stage "Starting React build process..."
+              if npm run build >> "$BUILD_LOG_FILE" 2>&1; then
+                log_stage "✅ React build completed successfully"
+              else
+                log_stage "❌ React build failed"
+                continue
+              fi
               ;;
             2) # Optimized build
               log_stage "Strategy 2: Optimized build with memory increase"
+              log_stage "Performing complete cleanup (node_modules, package-lock, build)..."
               rm -rf node_modules/ package-lock.json build/ || true
-              npm cache clean --force
+              
+              log_stage "Clearing npm cache..."
+              if npm cache clean --force >> "$BUILD_LOG_FILE" 2>&1; then
+                log_stage "✅ npm cache cleared successfully"
+              else
+                log_stage "⚠️ npm cache clear had issues"
+              fi
+              
+              log_stage "Setting Node.js memory limit to 4GB..."
               export NODE_OPTIONS="--max-old-space-size=4096"
-              npm install --no-optional && npm run build
+              log_stage "NODE_OPTIONS set to: $NODE_OPTIONS"
+              
+              log_stage "Installing dependencies (no optional packages)..."
+              if npm install --no-optional >> "$BUILD_LOG_FILE" 2>&1; then
+                log_stage "✅ npm install completed successfully"
+              else
+                log_stage "❌ npm install failed"
+                continue
+              fi
+              
+              log_stage "Starting optimized React build..."
+              if npm run build >> "$BUILD_LOG_FILE" 2>&1; then
+                log_stage "✅ Optimized React build completed successfully"
+              else
+                log_stage "❌ Optimized React build failed"
+                continue
+              fi
               ;;
             3) # Emergency fallback
               log_stage "Strategy 3: Emergency fallback build"
+              log_stage "Performing emergency cleanup..."
               rm -rf node_modules/ package-lock.json build/ || true
+              
+              log_stage "Setting maximum Node.js memory limit (8GB)..."
               export NODE_OPTIONS="--max-old-space-size=8192"
               export CI=false
-              npm install --legacy-peer-deps && npm run build || {
-                log_stage "Creating emergency static build"
+              log_stage "NODE_OPTIONS: $NODE_OPTIONS, CI: $CI"
+              
+              log_stage "Installing dependencies with legacy peer deps..."
+              if npm install --legacy-peer-deps >> "$BUILD_LOG_FILE" 2>&1; then
+                log_stage "✅ npm install with legacy-peer-deps completed"
+                
+                log_stage "Attempting emergency React build..."
+                if npm run build >> "$BUILD_LOG_FILE" 2>&1; then
+                  log_stage "✅ Emergency React build completed successfully"
+                else
+                  log_stage "❌ Emergency React build failed, creating static fallback..."
+                fi
+              else
+                log_stage "❌ npm install with legacy-peer-deps failed, creating static fallback..."
+              fi
+              
+              # Emergency static build
+              if [[ ! -d "build" || ! -f "build/index.html" ]]; then
+                log_stage "Creating emergency static build..."
                 mkdir -p build
                 cat > build/index.html << 'EOF'
         <!DOCTYPE html><html><head><title>React App</title></head>
         <body><div id="root"><h1>Emergency Build - Deployment Successful</h1></div></body></html>
         EOF
                 echo '{"name":"React App"}' > build/manifest.json
-              }
+                log_stage "✅ Emergency static build created successfully"
+              fi
               ;;
           esac
           
           if [[ -d "build" && -f "build/index.html" ]]; then
             BUILD_SIZE=$(du -sh build/ | cut -f1)
-            log_stage "Build successful on attempt $ATTEMPT (Size: $BUILD_SIZE)"
+            FILE_COUNT=$(find build/ -type f | wc -l)
+            log_stage "✅ Build verification successful:"
+            log_stage "   Build directory exists: ✅"
+            log_stage "   Index.html exists: ✅"
+            log_stage "   Build size: $BUILD_SIZE"
+            log_stage "   File count: $FILE_COUNT"
+            log_stage "   Build completed on attempt $ATTEMPT"
+            
+            # Log build contents summary
+            log_stage "Build contents summary:"
+            find build/ -type f -exec basename {} \; | sort | uniq -c | while read count file; do
+              log_stage "   $file: $count files"
+            done >> "$BUILD_LOG_FILE" 2>&1 || true
+            
             echo "success=true" >> $GITHUB_OUTPUT
             echo "attempts=$ATTEMPT" >> $GITHUB_OUTPUT
+            echo "log_path=$BUILD_LOG_FILE" >> $GITHUB_OUTPUT
             break
           fi
           
           if [[ $ATTEMPT -eq $MAX_ATTEMPTS ]]; then
-            log_stage "All build attempts failed"
+            log_stage "❌ All build attempts failed after $MAX_ATTEMPTS tries"
+            log_stage "Build strategies attempted:"
+            log_stage "   1. Standard clean build"
+            log_stage "   2. Optimized build with increased memory"
+            log_stage "   3. Emergency fallback with static content"
             echo "success=false" >> $GITHUB_OUTPUT
             echo "attempts=$MAX_ATTEMPTS" >> $GITHUB_OUTPUT
+            echo "log_path=$BUILD_LOG_FILE" >> $GITHUB_OUTPUT
             exit 1
           fi
           
-          log_stage "Build attempt $ATTEMPT failed, trying next strategy in 10s..."
+          log_stage "⚠️ Build attempt $ATTEMPT failed, trying next strategy in 10 seconds..."
           sleep 10
         done
+        
+        log_stage "============================================="
+        log_stage "BUILD PROCESS COMPLETED"
+        log_stage "============================================="
       env:
         CI: true
         NODE_ENV: production
