@@ -512,6 +512,11 @@ jobs:
     if: always() && needs.deploy-s3.outputs.deployment-status == 'success'
     
     steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
     - name: 📊 Create Enhanced Reports (MD & HTML)
       run: |
         # Enhanced logging function
@@ -536,11 +541,12 @@ jobs:
         TOTAL_RECOVERIES=$(( BUILD_RECOVERIES + DEPLOY_RECOVERIES + API_RECOVERIES + VERIFY_RECOVERIES ))
         
         TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S UTC')
+        DATE_FOLDER=$(date '+%Y-%m-%d')
         
-        mkdir -p reports
+        mkdir -p "deployment-reports/$DATE_FOLDER/run-${{ github.run_id }}"
         
         log_stage "Generating Markdown report"
-        cat > reports/deployment-report.md << EOF
+        cat > "deployment-reports/$DATE_FOLDER/run-${{ github.run_id }}/deployment-report.md" << EOF
         # 🚀 Progressive Resilient Deployment Report
         
         **Generated on:** $TIMESTAMP  
@@ -588,7 +594,7 @@ jobs:
         EOF
         
         log_stage "Generating HTML report"
-        cat > reports/deployment-report.html << EOF
+        cat > "deployment-reports/$DATE_FOLDER/run-${{ github.run_id }}/deployment-report.html" << EOF
         <!DOCTYPE html>
         <html lang="en">
         <head>
@@ -719,9 +725,123 @@ jobs:
         </html>
         EOF
         
-        log_stage "Reports generated successfully"
+        log_stage "Capturing structured pipeline logs"
+        cat > "deployment-reports/$DATE_FOLDER/run-${{ github.run_id }}/pipeline-logs.md" << EOF
+        # Pipeline Execution Logs
         
-        echo "✅ Enhanced reports generated!"
+        **Run ID:** ${{ github.run_id }}  
+        **Timestamp:** $TIMESTAMP  
+        **Workflow:** ${{ github.workflow }}  
+        **Event:** ${{ github.event_name }}  
+        **Branch:** ${{ github.ref_name }}  
+        
+        ## Build Stage Logs
+        - Attempts: $BUILD_ATTEMPTS
+        - Recoveries: $BUILD_RECOVERIES
+        - Status: ${{ needs.build-react.outputs.build-success }}
+        
+        ## Deployment Stage Logs  
+        - Strategy: $DEPLOYMENT_TYPE
+        - Attempts: $DEPLOY_ATTEMPTS
+        - Recoveries: $DEPLOY_RECOVERIES
+        - Status: ${{ needs.deploy-s3.outputs.deployment-status }}
+        - Frontend URL: ${{ needs.deploy-s3.outputs.website-url }}
+        - CloudFront URL: ${{ needs.deploy-s3.outputs.cloudfront-url }}
+        
+        ## API Stage Logs
+        - Attempts: $API_ATTEMPTS  
+        - Recoveries: $API_RECOVERIES
+        - API URL: ${{ needs.deploy-api.outputs.api-url }}
+        
+        ## Verification Stage Logs
+        - Attempts: $VERIFY_ATTEMPTS
+        - Recoveries: $VERIFY_RECOVERIES  
+        - Status: $VERIFICATION_STATUS
+        
+        ## Summary
+        - Total Recoveries: $TOTAL_RECOVERIES
+        - Overall Status: SUCCESS
+        - Cost: \$0.00/month
+        EOF
+        
+        # Create index file for easy navigation
+        log_stage "Creating deployment index"
+        cat > "deployment-reports/$DATE_FOLDER/run-${{ github.run_id }}/README.md" << EOF
+        # Deployment Run ${{ github.run_id }}
+        
+        **Date:** $TIMESTAMP  
+        **Status:** ✅ SUCCESS  
+        **Total Recoveries:** $TOTAL_RECOVERIES  
+        
+        ## 📁 Files in this deployment:
+        - [\`deployment-report.md\`](./deployment-report.md) - Detailed deployment report
+        - [\`deployment-report.html\`](./deployment-report.html) - Visual HTML report  
+        - [\`pipeline-logs.md\`](./pipeline-logs.md) - Structured pipeline logs
+        
+        ## 🌐 Live URLs:
+        - **Frontend:** ${{ needs.deploy-s3.outputs.website-url || 'N/A' }}
+        - **API:** ${{ needs.deploy-api.outputs.api-url || 'N/A' }}
+        EOF
+        
+        log_stage "Reports and logs generated successfully"
+    
+    - name: 🔀 Commit Reports to Branch
+      run: |
+        # Enhanced logging function
+        log_stage() {
+          echo "[$(date '+%Y-%m-%d %H:%M:%S')] [GIT-STAGE] $1"
+        }
+        
+        log_stage "Configuring Git for automated commits"
+        git config --global user.name "GitHub Actions Bot"
+        git config --global user.email "actions@github.com"
+        
+        BRANCH_NAME="deployment-reports"
+        DATE_FOLDER=$(date '+%Y-%m-%d')
+        
+        log_stage "Checking if branch $BRANCH_NAME exists"
+        if git show-ref --quiet refs/remotes/origin/$BRANCH_NAME; then
+          log_stage "Branch exists, checking out existing branch"
+          git checkout $BRANCH_NAME
+          git pull origin $BRANCH_NAME
+        else
+          log_stage "Creating new branch $BRANCH_NAME"
+          git checkout -b $BRANCH_NAME
+        fi
+        
+        log_stage "Staging deployment reports and logs"
+        git add "deployment-reports/$DATE_FOLDER/run-${{ github.run_id }}/"
+        
+        # Check if there are changes to commit
+        if git diff --staged --quiet; then
+          log_stage "No changes to commit"
+        else
+          log_stage "Committing deployment reports"
+          git commit -m "📊 Deployment Report - Run ${{ github.run_id }}
+
+        🚀 Deployment Status: SUCCESS
+        📅 Date: $(date '+%Y-%m-%d %H:%M:%S UTC')
+        🔄 Total Recoveries: $(( ${{ needs.build-react.outputs.build-attempts || 0 }} + ${{ needs.deploy-s3.outputs.deployment-attempts || 0 }} + ${{ needs.deploy-api.outputs.api-attempts || 0 }} + ${{ needs.verify-deployment.outputs.verification-attempts || 0 }} - 4 ))
+        🛡️ Strategy: ${{ needs.deploy-s3.outputs.deployment-type || 'unknown' }}
+        
+        Files added:
+        - deployment-report.md (Detailed report)
+        - deployment-report.html (Visual report)  
+        - pipeline-logs.md (Structured logs)
+        - README.md (Navigation index)
+        
+        🌐 URLs:
+        - Frontend: ${{ needs.deploy-s3.outputs.website-url || 'N/A' }}
+        - API: ${{ needs.deploy-api.outputs.api-url || 'N/A' }}"
+          
+          log_stage "Pushing to remote branch"
+          git push origin $BRANCH_NAME
+          
+          log_stage "✅ Reports successfully pushed to branch: $BRANCH_NAME"
+          log_stage "📁 View reports at: https://github.com/${{ github.repository }}/tree/$BRANCH_NAME/deployment-reports/$DATE_FOLDER/run-${{ github.run_id }}"
+        fi
+        
+        echo "✅ Enhanced reports and logs generated!"
         echo ""
         echo "📊 FINAL STATS:"
         echo "🏗️ Build: $BUILD_ATTEMPTS attempts ($BUILD_RECOVERIES recoveries)"
@@ -730,12 +850,13 @@ jobs:
         echo "✅ Verify: $VERIFY_ATTEMPTS attempts ($VERIFY_RECOVERIES recoveries) - $VERIFICATION_STATUS"
         echo "🛡️ Total Recoveries: $TOTAL_RECOVERIES"
         echo "💰 Monthly Cost: \$0.00"
+        echo "🔀 Reports will be committed to: deployment-reports branch"
         
-    - name: 📤 Upload Enhanced Reports
+    - name: 📤 Upload Reports as Artifacts (Backup)
       uses: actions/upload-artifact@v4
       with:
         name: deployment-reports-${{ github.run_id }}
-        path: reports/
+        path: deployment-reports/
         retention-days: 30
 
   cleanup-resources:
