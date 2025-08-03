@@ -143,9 +143,9 @@ jobs:
                 log_stage "Creating emergency static build..."
                 mkdir -p build
                 cat > build/index.html << 'EOF'
-<!DOCTYPE html><html><head><title>React App</title></head>
-<body><div id="root"><h1>Emergency Build - Deployment Successful</h1></div></body></html>
-EOF
+          <!DOCTYPE html><html><head><title>React App</title></head>
+          <body><div id="root"><h1>Emergency Build - Deployment Successful</h1></div></body></html>
+          EOF
                 echo '{"name":"React App"}' > build/manifest.json
                 log_stage "✅ Emergency static build created successfully"
               fi
