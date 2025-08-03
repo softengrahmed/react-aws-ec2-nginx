@@ -271,7 +271,7 @@ EOF
               aws s3api delete-public-access-block --bucket $BUCKET_NAME 2>>"$DEPLOY_LOG_FILE" || continue
               aws s3 website s3://$BUCKET_NAME --index-document index.html --error-document index.html 2>>"$DEPLOY_LOG_FILE" || continue
               
-              cat > policy.json << EOF
+              cat > policy.json << 'EOF'
 {"Version": "2012-10-17", "Statement": [{"Sid": "PublicRead", "Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "arn:aws:s3:::$BUCKET_NAME/*"}]}
 EOF
               
@@ -370,7 +370,7 @@ EOF
           
           # Create Lambda code
           mkdir -p lambda-src
-          cat > lambda-src/index.js << EOF
+          cat > lambda-src/index.js << 'EOF'
 exports.handler = async (event) => {
   console.log('Event received:', JSON.stringify(event, null, 2));
   
@@ -383,18 +383,21 @@ exports.handler = async (event) => {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      message: 'React Serverless API - Strategy $ATTEMPT Success!',
+      message: 'React Serverless API Success!',
       timestamp: new Date().toISOString(),
       deployment: { 
-        attempt: $ATTEMPT, 
-        runId: '${{ github.run_id }}',
-        region: '${{ env.AWS_REGION }}'
+        runId: 'RUN_ID_PLACEHOLDER',
+        region: 'REGION_PLACEHOLDER'
       },
       event: event
     })
   };
 };
 EOF
+          
+          # Replace placeholders
+          sed -i "s/RUN_ID_PLACEHOLDER/${{ github.run_id }}/g" lambda-src/index.js
+          sed -i "s/REGION_PLACEHOLDER/${{ env.AWS_REGION }}/g" lambda-src/index.js
           
           cd lambda-src && zip -r ../lambda.zip . && cd ..
           log_stage "✅ Lambda package created"
@@ -533,7 +536,9 @@ EOF
           log_stage "Creating CloudWatch dashboard..."
           
           # Create dashboard configuration
-          cat > dashboard.json << EOF
+          if [[ -n "$LAMBDA_ARN" ]]; then
+            # Dashboard with Lambda metrics
+            cat > dashboard.json << 'EOF'
 {
   "widgets": [
     {
@@ -541,49 +546,80 @@ EOF
       "x": 0, "y": 0, "width": 12, "height": 6,
       "properties": {
         "metrics": [
-          [ "AWS/S3", "BucketSizeBytes", "BucketName", "$S3_BUCKET", "StorageType", "StandardStorage" ],
+          [ "AWS/S3", "BucketSizeBytes", "BucketName", "BUCKET_PLACEHOLDER", "StorageType", "StandardStorage" ],
           [ ".", "NumberOfObjects", ".", ".", ".", "AllStorageTypes" ]
         ],
         "period": 86400,
         "stat": "Average",
-        "region": "${{ env.AWS_REGION }}",
+        "region": "REGION_PLACEHOLDER",
         "title": "S3 Storage Metrics"
-      }
-    }$(if [[ -n "$LAMBDA_ARN" ]]; then echo ",
-    {
-      \"type\": \"metric\",
-      \"x\": 0, \"y\": 6, \"width\": 12, \"height\": 6,
-      \"properties\": {
-        \"metrics\": [
-          [ \"AWS/Lambda\", \"Duration\", \"FunctionName\", \"${{ env.LAMBDA_FUNCTION }}\" ],
-          [ \".\", \"Invocations\", \".\", \".\" ],
-          [ \".\", \"Errors\", \".\", \".\" ]
-        ],
-        \"period\": 300,
-        \"stat\": \"Average\",
-        \"region\": \"${{ env.AWS_REGION }}\",
-        \"title\": \"Lambda Performance Metrics\"
       }
     },
     {
-      \"type\": \"metric\",
-      \"x\": 0, \"y\": 12, \"width\": 12, \"height\": 6,
-      \"properties\": {
-        \"metrics\": [
-          [ \"AWS/ApiGateway\", \"Count\", \"ApiName\", \"${{ env.API_GATEWAY }}\" ],
-          [ \".\", \"Latency\", \".\", \".\" ],
-          [ \".\", \"4XXError\", \".\", \".\" ],
-          [ \".\", \"5XXError\", \".\", \".\" ]
+      "type": "metric",
+      "x": 0, "y": 6, "width": 12, "height": 6,
+      "properties": {
+        "metrics": [
+          [ "AWS/Lambda", "Duration", "FunctionName", "LAMBDA_PLACEHOLDER" ],
+          [ ".", "Invocations", ".", "." ],
+          [ ".", "Errors", ".", "." ]
         ],
-        \"period\": 300,
-        \"stat\": \"Sum\",
-        \"region\": \"${{ env.AWS_REGION }}\",
-        \"title\": \"API Gateway Metrics\"
+        "period": 300,
+        "stat": "Average",
+        "region": "REGION_PLACEHOLDER",
+        "title": "Lambda Performance Metrics"
       }
-    }"; fi)
+    },
+    {
+      "type": "metric",
+      "x": 0, "y": 12, "width": 12, "height": 6,
+      "properties": {
+        "metrics": [
+          [ "AWS/ApiGateway", "Count", "ApiName", "API_PLACEHOLDER" ],
+          [ ".", "Latency", ".", "." ],
+          [ ".", "4XXError", ".", "." ],
+          [ ".", "5XXError", ".", "." ]
+        ],
+        "period": 300,
+        "stat": "Sum",
+        "region": "REGION_PLACEHOLDER",
+        "title": "API Gateway Metrics"
+      }
+    }
   ]
 }
 EOF
+            # Replace placeholders with actual values
+            sed -i "s/BUCKET_PLACEHOLDER/$S3_BUCKET/g" dashboard.json
+            sed -i "s/LAMBDA_PLACEHOLDER/${{ env.LAMBDA_FUNCTION }}/g" dashboard.json
+            sed -i "s/API_PLACEHOLDER/${{ env.API_GATEWAY }}/g" dashboard.json
+            sed -i "s/REGION_PLACEHOLDER/${{ env.AWS_REGION }}/g" dashboard.json
+          else
+            # Dashboard with only S3 metrics
+            cat > dashboard.json << 'EOF'
+{
+  "widgets": [
+    {
+      "type": "metric",
+      "x": 0, "y": 0, "width": 12, "height": 6,
+      "properties": {
+        "metrics": [
+          [ "AWS/S3", "BucketSizeBytes", "BucketName", "BUCKET_PLACEHOLDER", "StorageType", "StandardStorage" ],
+          [ ".", "NumberOfObjects", ".", ".", ".", "AllStorageTypes" ]
+        ],
+        "period": 86400,
+        "stat": "Average",
+        "region": "REGION_PLACEHOLDER",
+        "title": "S3 Storage Metrics"
+      }
+    }
+  ]
+}
+EOF
+            # Replace placeholders with actual values
+            sed -i "s/BUCKET_PLACEHOLDER/$S3_BUCKET/g" dashboard.json
+            sed -i "s/REGION_PLACEHOLDER/${{ env.AWS_REGION }}/g" dashboard.json
+          fi
           
           log_stage "Dashboard configuration created"
           
@@ -649,17 +685,17 @@ EOF
           mkdir -p monitoring-artifacts
           
           # Create monitoring dashboard export
-          cat > monitoring-artifacts/dashboard-config.json << EOF
+          cat > monitoring-artifacts/dashboard-config.json << 'EOF'
 {
-  "dashboard_name": "$DASHBOARD_NAME",
-  "created": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "run_id": "${{ github.run_id }}",
+  "dashboard_name": "DASHBOARD_PLACEHOLDER",
+  "created": "TIMESTAMP_PLACEHOLDER",
+  "run_id": "RUN_ID_PLACEHOLDER",
   "resources": {
-    "s3_bucket": "$S3_BUCKET",
-    "lambda_function": "${{ env.LAMBDA_FUNCTION }}",
-    "api_gateway": "${{ env.API_GATEWAY }}",
-    "lambda_arn": "$LAMBDA_ARN",
-    "api_id": "$API_ID"
+    "s3_bucket": "S3_PLACEHOLDER",
+    "lambda_function": "LAMBDA_PLACEHOLDER",
+    "api_gateway": "API_PLACEHOLDER",
+    "lambda_arn": "LAMBDA_ARN_PLACEHOLDER",
+    "api_id": "API_ID_PLACEHOLDER"
   },
   "metrics": {
     "s3": ["BucketSizeBytes", "NumberOfObjects"],
@@ -667,20 +703,30 @@ EOF
     "apigateway": ["Count", "Latency", "4XXError", "5XXError"]
   },
   "alarms": [
-    "S3-HighObjectCount-${{ github.run_id }}",
-    "Lambda-ErrorRate-${{ github.run_id }}",
-    "Lambda-Duration-${{ github.run_id }}"
+    "S3-HighObjectCount-RUN_ID_PLACEHOLDER",
+    "Lambda-ErrorRate-RUN_ID_PLACEHOLDER",
+    "Lambda-Duration-RUN_ID_PLACEHOLDER"
   ]
 }
 EOF
           
+          # Replace placeholders
+          sed -i "s/DASHBOARD_PLACEHOLDER/$DASHBOARD_NAME/g" monitoring-artifacts/dashboard-config.json
+          sed -i "s/TIMESTAMP_PLACEHOLDER/$(date -u +%Y-%m-%dT%H:%M:%SZ)/g" monitoring-artifacts/dashboard-config.json
+          sed -i "s/RUN_ID_PLACEHOLDER/${{ github.run_id }}/g" monitoring-artifacts/dashboard-config.json
+          sed -i "s/S3_PLACEHOLDER/$S3_BUCKET/g" monitoring-artifacts/dashboard-config.json
+          sed -i "s/LAMBDA_PLACEHOLDER/${{ env.LAMBDA_FUNCTION }}/g" monitoring-artifacts/dashboard-config.json
+          sed -i "s/API_PLACEHOLDER/${{ env.API_GATEWAY }}/g" monitoring-artifacts/dashboard-config.json
+          sed -i "s/LAMBDA_ARN_PLACEHOLDER/$LAMBDA_ARN/g" monitoring-artifacts/dashboard-config.json
+          sed -i "s/API_ID_PLACEHOLDER/$API_ID/g" monitoring-artifacts/dashboard-config.json
+          
           # Create monitoring report
-          cat > monitoring-artifacts/monitoring-report.md << EOF
+          cat > monitoring-artifacts/monitoring-report.md << 'EOF'
 # 📊 CloudWatch Monitoring Report
 
-**Generated:** $(date -u +%Y-%m-%dT%H:%M:%SZ)  
-**Run ID:** ${{ github.run_id }}  
-**Dashboard:** $DASHBOARD_NAME  
+**Generated:** TIMESTAMP_PLACEHOLDER
+**Run ID:** RUN_ID_PLACEHOLDER
+**Dashboard:** DASHBOARD_PLACEHOLDER
 
 ## 📈 Dashboard Metrics
 
@@ -688,26 +734,26 @@ EOF
 - **BucketSizeBytes**: Total storage usage
 - **NumberOfObjects**: Object count tracking
 
-$(if [[ -n "$LAMBDA_ARN" ]]; then echo "### Lambda Function Monitoring
+### Lambda Function Monitoring (if deployed)
 - **Duration**: Function execution time
 - **Invocations**: Request count
 - **Errors**: Error rate tracking
 
-### API Gateway Monitoring  
+### API Gateway Monitoring (if deployed)
 - **Count**: Total API requests
 - **Latency**: Response time
 - **4XXError**: Client errors
-- **5XXError**: Server errors"; fi)
+- **5XXError**: Server errors
 
 ## 🚨 CloudWatch Alarms
 
 1. **S3-HighObjectCount**: Triggers when objects > 1000
-$(if [[ -n "$LAMBDA_ARN" ]]; then echo "2. **Lambda-ErrorRate**: Triggers when error rate > 5%
-3. **Lambda-Duration**: Triggers when duration > 10s"; fi)
+2. **Lambda-ErrorRate**: Triggers when error rate > 5% (if Lambda deployed)
+3. **Lambda-Duration**: Triggers when duration > 10s (if Lambda deployed)
 
 ## 🔗 Access Dashboard
 
-**CloudWatch URL:** https://${{ env.AWS_REGION }}.console.aws.amazon.com/cloudwatch/home?region=${{ env.AWS_REGION }}#dashboards:name=$DASHBOARD_NAME
+**CloudWatch URL:** https://REGION_PLACEHOLDER.console.aws.amazon.com/cloudwatch/home?region=REGION_PLACEHOLDER#dashboards:name=DASHBOARD_PLACEHOLDER
 
 ## 💡 Monitoring Best Practices
 
@@ -716,6 +762,12 @@ $(if [[ -n "$LAMBDA_ARN" ]]; then echo "2. **Lambda-ErrorRate**: Triggers when e
 - Monitor costs alongside performance metrics
 - Consider custom metrics for business KPIs
 EOF
+          
+          # Replace placeholders
+          sed -i "s/TIMESTAMP_PLACEHOLDER/$(date -u +%Y-%m-%dT%H:%M:%SZ)/g" monitoring-artifacts/monitoring-report.md
+          sed -i "s/RUN_ID_PLACEHOLDER/${{ github.run_id }}/g" monitoring-artifacts/monitoring-report.md
+          sed -i "s/DASHBOARD_PLACEHOLDER/$DASHBOARD_NAME/g" monitoring-artifacts/monitoring-report.md
+          sed -i "s/REGION_PLACEHOLDER/${{ env.AWS_REGION }}/g" monitoring-artifacts/monitoring-report.md
           
           # Verify dashboard exists
           log_stage "Verifying dashboard creation..."
@@ -945,43 +997,43 @@ EOF
         cp -r monitoring-artifacts/* "$RUN_FOLDER/monitoring/" 2>/dev/null || true
         
         log_stage "Generating enhanced report with monitoring integration"
-        cat > "$RUN_FOLDER/deployment-report.md" << EOF
+        cat > "$RUN_FOLDER/deployment-report.md" << 'EOF'
 # 🚀 Progressive Resilient Deployment Report
 
-**Generated on:** $TIMESTAMP  
-**Pipeline Run ID:** ${{ github.run_id }}  
-**Workflow:** ${{ github.workflow }}  
+**Generated on:** TIMESTAMP_PLACEHOLDER
+**Pipeline Run ID:** RUN_ID_PLACEHOLDER
+**Workflow:** WORKFLOW_PLACEHOLDER
 
 ## ✅ Deployment Status: SUCCESS
 
 ### 📊 Resilience Statistics
-- **Build**: $BUILD_ATTEMPTS/${{ env.MAX_RETRIES }} attempts
-- **Deploy**: $DEPLOY_ATTEMPTS/${{ env.MAX_RETRIES }} attempts  
-- **API**: $API_ATTEMPTS/${{ env.MAX_RETRIES }} attempts
-- **Monitoring**: $MONITOR_ATTEMPTS/${{ env.MAX_RETRIES }} attempts ($MONITORING_STATUS)
-- **Verify**: $VERIFY_ATTEMPTS/${{ env.MAX_RETRIES }} attempts ($VERIFICATION_STATUS)
-- **Total Auto-Recoveries**: $TOTAL_RECOVERIES
+- **Build**: BUILD_ATTEMPTS_PLACEHOLDER/MAX_RETRIES_PLACEHOLDER attempts
+- **Deploy**: DEPLOY_ATTEMPTS_PLACEHOLDER/MAX_RETRIES_PLACEHOLDER attempts  
+- **API**: API_ATTEMPTS_PLACEHOLDER/MAX_RETRIES_PLACEHOLDER attempts
+- **Monitoring**: MONITOR_ATTEMPTS_PLACEHOLDER/MAX_RETRIES_PLACEHOLDER attempts (MONITORING_STATUS_PLACEHOLDER)
+- **Verify**: VERIFY_ATTEMPTS_PLACEHOLDER/MAX_RETRIES_PLACEHOLDER attempts (VERIFICATION_STATUS_PLACEHOLDER)
+- **Total Auto-Recoveries**: TOTAL_RECOVERIES_PLACEHOLDER
 
 ### 🌐 Deployment URLs
-- **Frontend**: ${{ needs.deploy-s3.outputs.website-url || 'N/A' }}
-- **API**: ${{ needs.deploy-api.outputs.api-url || 'N/A' }}
-- **📊 Monitoring Dashboard**: [$DASHBOARD_URL]($DASHBOARD_URL)
+- **Frontend**: FRONTEND_URL_PLACEHOLDER
+- **API**: API_URL_PLACEHOLDER
+- **📊 Monitoring Dashboard**: [DASHBOARD_URL_PLACEHOLDER](DASHBOARD_URL_PLACEHOLDER)
 
 ### 📈 Monitoring & Analytics
-- **CloudWatch Dashboard**: [View Real-time Metrics]($DASHBOARD_URL)
+- **CloudWatch Dashboard**: [View Real-time Metrics](DASHBOARD_URL_PLACEHOLDER)
 - **Performance Tracking**: S3 storage, Lambda performance, API metrics
 - **Alerting**: Automated alarms for errors and performance issues
 - **📁 Monitoring Artifacts**: [View Monitoring Configuration](./monitoring/)
 
-### 🛡️ Strategy Used: $(echo "$DEPLOYMENT_TYPE" | tr '_' ' ' | sed 's/\b\w/\U&/g')
+### 🛡️ Strategy Used: DEPLOYMENT_TYPE_PLACEHOLDER
 
 ### 💰 Cost Analysis
-**Before**: \$15-50/month (Traditional hosting + monitoring)  
-**After**: \$0.00/month (AWS Free Tier with CloudWatch)  
-**Annual Savings**: \$180-600  
+**Before**: $15-50/month (Traditional hosting + monitoring)  
+**After**: $0.00/month (AWS Free Tier with CloudWatch)  
+**Annual Savings**: $180-600  
 
 ### 🎯 Key Features
-✅ Progressive error recovery ($TOTAL_RECOVERIES events resolved)  
+✅ Progressive error recovery (TOTAL_RECOVERIES_PLACEHOLDER events resolved)  
 ✅ Multi-strategy deployment (no blind retries)  
 ✅ **Real-time monitoring & alerting**  
 ✅ **Performance metrics dashboard**  
@@ -997,16 +1049,34 @@ EOF
 ✅ Cost-optimized monitoring setup  
 
 ### 🚀 Next Steps
-1. **[Access Monitoring Dashboard]($DASHBOARD_URL)** to view real-time metrics
+1. **[Access Monitoring Dashboard](DASHBOARD_URL_PLACEHOLDER)** to view real-time metrics
 2. Review performance baselines in first 24 hours
 3. Set up SNS notifications for critical alerts
 4. Test your app at the deployment URLs
 5. Consider custom domain setup
 
 **Success Rate**: 100% (with progressive resilience)  
-**Monitoring Status**: $MONITORING_STATUS  
+**Monitoring Status**: MONITORING_STATUS_PLACEHOLDER
 **Pipeline Reliability**: All failures automatically resolved  
 EOF
+        
+        # Replace placeholders with actual values
+        sed -i "s/TIMESTAMP_PLACEHOLDER/$TIMESTAMP/g" "$RUN_FOLDER/deployment-report.md"
+        sed -i "s/RUN_ID_PLACEHOLDER/${{ github.run_id }}/g" "$RUN_FOLDER/deployment-report.md"
+        sed -i "s/WORKFLOW_PLACEHOLDER/${{ github.workflow }}/g" "$RUN_FOLDER/deployment-report.md"
+        sed -i "s/BUILD_ATTEMPTS_PLACEHOLDER/$BUILD_ATTEMPTS/g" "$RUN_FOLDER/deployment-report.md"
+        sed -i "s/DEPLOY_ATTEMPTS_PLACEHOLDER/$DEPLOY_ATTEMPTS/g" "$RUN_FOLDER/deployment-report.md"
+        sed -i "s/API_ATTEMPTS_PLACEHOLDER/$API_ATTEMPTS/g" "$RUN_FOLDER/deployment-report.md"
+        sed -i "s/MONITOR_ATTEMPTS_PLACEHOLDER/$MONITOR_ATTEMPTS/g" "$RUN_FOLDER/deployment-report.md"
+        sed -i "s/VERIFY_ATTEMPTS_PLACEHOLDER/$VERIFY_ATTEMPTS/g" "$RUN_FOLDER/deployment-report.md"
+        sed -i "s/MAX_RETRIES_PLACEHOLDER/${{ env.MAX_RETRIES }}/g" "$RUN_FOLDER/deployment-report.md"
+        sed -i "s/MONITORING_STATUS_PLACEHOLDER/$MONITORING_STATUS/g" "$RUN_FOLDER/deployment-report.md"
+        sed -i "s/VERIFICATION_STATUS_PLACEHOLDER/$VERIFICATION_STATUS/g" "$RUN_FOLDER/deployment-report.md"
+        sed -i "s/TOTAL_RECOVERIES_PLACEHOLDER/$TOTAL_RECOVERIES/g" "$RUN_FOLDER/deployment-report.md"
+        sed -i "s|FRONTEND_URL_PLACEHOLDER|${{ needs.deploy-s3.outputs.website-url || 'N/A' }}|g" "$RUN_FOLDER/deployment-report.md"
+        sed -i "s|API_URL_PLACEHOLDER|${{ needs.deploy-api.outputs.api-url || 'N/A' }}|g" "$RUN_FOLDER/deployment-report.md"
+        sed -i "s|DASHBOARD_URL_PLACEHOLDER|$DASHBOARD_URL|g" "$RUN_FOLDER/deployment-report.md"
+        sed -i "s/DEPLOYMENT_TYPE_PLACEHOLDER/$(echo "$DEPLOYMENT_TYPE" | tr '_' ' ' | sed 's/\b\w/\U&/g')/g" "$RUN_FOLDER/deployment-report.md"
         
         log_stage "Report generation completed with monitoring integration"
     
