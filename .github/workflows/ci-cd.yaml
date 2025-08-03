@@ -371,29 +371,29 @@ jobs:
           # Create Lambda code
           mkdir -p lambda-src
           cat > lambda-src/index.js << 'EOF'
-exports.handler = async (event) => {
-  console.log('Event received:', JSON.stringify(event, null, 2));
-  
-  return {
-    statusCode: 200,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Headers': 'Content-Type',
-      'Access-Control-Allow-Methods': 'OPTIONS,POST,GET',
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      message: 'React Serverless API Success!',
-      timestamp: new Date().toISOString(),
-      deployment: { 
-        runId: 'RUN_ID_PLACEHOLDER',
-        region: 'REGION_PLACEHOLDER'
-      },
-      event: event
-    })
-  };
-};
-EOF
+        exports.handler = async (event) => {
+          console.log('Event received:', JSON.stringify(event, null, 2));
+          
+          return {
+            statusCode: 200,
+            headers: {
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Headers': 'Content-Type',
+              'Access-Control-Allow-Methods': 'OPTIONS,POST,GET',
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              message: 'React Serverless API Success!',
+              timestamp: new Date().toISOString(),
+              deployment: { 
+                runId: 'RUN_ID_PLACEHOLDER',
+                region: 'REGION_PLACEHOLDER'
+              },
+              event: event
+            })
+          };
+        };
+        EOF
           
           # Replace placeholders
           sed -i "s/RUN_ID_PLACEHOLDER/${{ github.run_id }}/g" lambda-src/index.js
@@ -1000,65 +1000,65 @@ EOF
         cat > "$RUN_FOLDER/deployment-report.md" << 'EOF'
 # 🚀 Progressive Resilient Deployment Report
 
-**Generated on:** TIMESTAMP_PLACEHOLDER
-**Pipeline Run ID:** RUN_ID_PLACEHOLDER
-**Workflow:** WORKFLOW_PLACEHOLDER
+        **Generated on:** TIMESTAMP_PLACEHOLDER
+        **Pipeline Run ID:** RUN_ID_PLACEHOLDER
+        **Workflow:** WORKFLOW_PLACEHOLDER
 
-## ✅ Deployment Status: SUCCESS
+        ## ✅ Deployment Status: SUCCESS
 
-### 📊 Resilience Statistics
-- **Build**: BUILD_ATTEMPTS_PLACEHOLDER/MAX_RETRIES_PLACEHOLDER attempts
-- **Deploy**: DEPLOY_ATTEMPTS_PLACEHOLDER/MAX_RETRIES_PLACEHOLDER attempts  
-- **API**: API_ATTEMPTS_PLACEHOLDER/MAX_RETRIES_PLACEHOLDER attempts
-- **Monitoring**: MONITOR_ATTEMPTS_PLACEHOLDER/MAX_RETRIES_PLACEHOLDER attempts (MONITORING_STATUS_PLACEHOLDER)
-- **Verify**: VERIFY_ATTEMPTS_PLACEHOLDER/MAX_RETRIES_PLACEHOLDER attempts (VERIFICATION_STATUS_PLACEHOLDER)
-- **Total Auto-Recoveries**: TOTAL_RECOVERIES_PLACEHOLDER
+        ### 📊 Resilience Statistics
+        - **Build**: BUILD_ATTEMPTS_PLACEHOLDER/MAX_RETRIES_PLACEHOLDER attempts
+        - **Deploy**: DEPLOY_ATTEMPTS_PLACEHOLDER/MAX_RETRIES_PLACEHOLDER attempts  
+        - **API**: API_ATTEMPTS_PLACEHOLDER/MAX_RETRIES_PLACEHOLDER attempts
+        - **Monitoring**: MONITOR_ATTEMPTS_PLACEHOLDER/MAX_RETRIES_PLACEHOLDER attempts (MONITORING_STATUS_PLACEHOLDER)
+        - **Verify**: VERIFY_ATTEMPTS_PLACEHOLDER/MAX_RETRIES_PLACEHOLDER attempts (VERIFICATION_STATUS_PLACEHOLDER)
+        - **Total Auto-Recoveries**: TOTAL_RECOVERIES_PLACEHOLDER
 
-### 🌐 Deployment URLs
-- **Frontend**: FRONTEND_URL_PLACEHOLDER
-- **API**: API_URL_PLACEHOLDER
-- **📊 Monitoring Dashboard**: [DASHBOARD_URL_PLACEHOLDER](DASHBOARD_URL_PLACEHOLDER)
+        ### 🌐 Deployment URLs
+        - **Frontend**: FRONTEND_URL_PLACEHOLDER
+        - **API**: API_URL_PLACEHOLDER
+        - **📊 Monitoring Dashboard**: [DASHBOARD_URL_PLACEHOLDER](DASHBOARD_URL_PLACEHOLDER)
 
-### 📈 Monitoring & Analytics
-- **CloudWatch Dashboard**: [View Real-time Metrics](DASHBOARD_URL_PLACEHOLDER)
-- **Performance Tracking**: S3 storage, Lambda performance, API metrics
-- **Alerting**: Automated alarms for errors and performance issues
-- **📁 Monitoring Artifacts**: [View Monitoring Configuration](./monitoring/)
+        ### 📈 Monitoring & Analytics
+        - **CloudWatch Dashboard**: [View Real-time Metrics](DASHBOARD_URL_PLACEHOLDER)
+        - **Performance Tracking**: S3 storage, Lambda performance, API metrics
+        - **Alerting**: Automated alarms for errors and performance issues
+        - **📁 Monitoring Artifacts**: [View Monitoring Configuration](./monitoring/)
 
-### 🛡️ Strategy Used: DEPLOYMENT_TYPE_PLACEHOLDER
+        ### 🛡️ Strategy Used: DEPLOYMENT_TYPE_PLACEHOLDER
 
-### 💰 Cost Analysis
-**Before**: $15-50/month (Traditional hosting + monitoring)  
-**After**: $0.00/month (AWS Free Tier with CloudWatch)  
-**Annual Savings**: $180-600  
+        ### 💰 Cost Analysis
+        **Before**: $15-50/month (Traditional hosting + monitoring)  
+        **After**: $0.00/month (AWS Free Tier with CloudWatch)  
+        **Annual Savings**: $180-600  
 
-### 🎯 Key Features
-✅ Progressive error recovery (TOTAL_RECOVERIES_PLACEHOLDER events resolved)  
-✅ Multi-strategy deployment (no blind retries)  
-✅ **Real-time monitoring & alerting**  
-✅ **Performance metrics dashboard**  
-✅ Zero monthly hosting costs  
-✅ Auto-scaling serverless architecture  
-✅ 99.99% availability SLA  
+        ### 🎯 Key Features
+        ✅ Progressive error recovery (TOTAL_RECOVERIES_PLACEHOLDER events resolved)  
+        ✅ Multi-strategy deployment (no blind retries)  
+        ✅ **Real-time monitoring & alerting**  
+        ✅ **Performance metrics dashboard**  
+        ✅ Zero monthly hosting costs  
+        ✅ Auto-scaling serverless architecture  
+        ✅ 99.99% availability SLA  
 
-### 📊 Monitoring Features
-✅ S3 storage usage tracking  
-✅ Lambda performance metrics  
-✅ API Gateway request monitoring  
-✅ Automated CloudWatch alarms  
-✅ Cost-optimized monitoring setup  
+        ### 📊 Monitoring Features
+        ✅ S3 storage usage tracking  
+        ✅ Lambda performance metrics  
+        ✅ API Gateway request monitoring  
+        ✅ Automated CloudWatch alarms  
+        ✅ Cost-optimized monitoring setup  
 
-### 🚀 Next Steps
-1. **[Access Monitoring Dashboard](DASHBOARD_URL_PLACEHOLDER)** to view real-time metrics
-2. Review performance baselines in first 24 hours
-3. Set up SNS notifications for critical alerts
-4. Test your app at the deployment URLs
-5. Consider custom domain setup
+        ### 🚀 Next Steps
+        1. **[Access Monitoring Dashboard](DASHBOARD_URL_PLACEHOLDER)** to view real-time metrics
+        2. Review performance baselines in first 24 hours
+        3. Set up SNS notifications for critical alerts
+        4. Test your app at the deployment URLs
+        5. Consider custom domain setup
 
-**Success Rate**: 100% (with progressive resilience)  
-**Monitoring Status**: MONITORING_STATUS_PLACEHOLDER
-**Pipeline Reliability**: All failures automatically resolved  
-EOF
+        **Success Rate**: 100% (with progressive resilience)  
+        **Monitoring Status**: MONITORING_STATUS_PLACEHOLDER
+        **Pipeline Reliability**: All failures automatically resolved  
+        EOF
         
         # Replace placeholders with actual values
         sed -i "s/TIMESTAMP_PLACEHOLDER/$TIMESTAMP/g" "$RUN_FOLDER/deployment-report.md"
