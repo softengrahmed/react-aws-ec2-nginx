@@ -1101,21 +1101,21 @@ jobs:
         if ! git diff --staged --quiet; then
           git commit -m "📊 Enhanced Deployment Report with Monitoring - Run ${{ github.run_id }}
 
-🚀 Status: SUCCESS with Monitoring
-📊 Dashboard: ${{ needs.setup-monitoring.outputs.dashboard-url }}
-🛡️ Recoveries: $TOTAL_RECOVERIES
-📈 Monitoring: ${{ needs.setup-monitoring.outputs.monitoring-status }}
+        🚀 Status: SUCCESS with Monitoring
+        📊 Dashboard: ${{ needs.setup-monitoring.outputs.dashboard-url }}
+        🛡️ Recoveries: $TOTAL_RECOVERIES
+        📈 Monitoring: ${{ needs.setup-monitoring.outputs.monitoring-status }}
 
-📁 Includes:
-├── deployment-report.md (Enhanced with monitoring)
-├── logs/ (All pipeline stages)
-└── monitoring/ (CloudWatch dashboard config)" || true
-          
-          git push origin $BRANCH_NAME 2>/dev/null || git push --set-upstream origin $BRANCH_NAME || true
-        fi
-        
-        echo "✅ Enhanced reports with monitoring generated!"
-        echo "📊 Monitoring Dashboard: ${{ needs.setup-monitoring.outputs.dashboard-url }}"
+        📁 Includes:
+        ├── deployment-report.md (Enhanced with monitoring)
+        ├── logs/ (All pipeline stages)
+        └── monitoring/ (CloudWatch dashboard config)" || true
+                  
+                  git push origin $BRANCH_NAME 2>/dev/null || git push --set-upstream origin $BRANCH_NAME || true
+                fi
+                
+                echo "✅ Enhanced reports with monitoring generated!"
+                echo "📊 Monitoring Dashboard: ${{ needs.setup-monitoring.outputs.dashboard-url }}"
     
     - uses: actions/upload-artifact@v4
       with:
