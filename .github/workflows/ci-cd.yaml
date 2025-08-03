@@ -272,8 +272,8 @@ jobs:
               aws s3 website s3://$BUCKET_NAME --index-document index.html --error-document index.html 2>>"$DEPLOY_LOG_FILE" || continue
               
               cat > policy.json << 'EOF'
-{"Version": "2012-10-17", "Statement": [{"Sid": "PublicRead", "Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "arn:aws:s3:::$BUCKET_NAME/*"}]}
-EOF
+              {"Version": "2012-10-17", "Statement": [{"Sid": "PublicRead", "Effect": "Allow", "Principal": "*", "Action": "s3:GetObject", "Resource": "arn:aws:s3:::$BUCKET_NAME/*"}]}
+              EOF
               
               if aws s3api put-bucket-policy --bucket $BUCKET_NAME --policy file://policy.json 2>>"$DEPLOY_LOG_FILE"; then
                 log_stage "✅ Bucket policy applied successfully"
@@ -405,8 +405,8 @@ EOF
           # Create IAM role
           ROLE_NAME="lambda-role-${{ github.run_id }}"
           cat > trust.json << 'EOF'
-{"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Principal": {"Service": "lambda.amazonaws.com"}, "Action": "sts:AssumeRole"}]}
-EOF
+          {"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Principal": {"Service": "lambda.amazonaws.com"}, "Action": "sts:AssumeRole"}]}
+          EOF
           
           ROLE_ARN=$(aws iam create-role --role-name $ROLE_NAME \
             --assume-role-policy-document file://trust.json --query 'Role.Arn' --output text 2>>"$API_LOG_FILE" || echo "")
@@ -539,56 +539,56 @@ EOF
           if [[ -n "$LAMBDA_ARN" ]]; then
             # Dashboard with Lambda metrics
             cat > dashboard.json << 'EOF'
-{
-  "widgets": [
-    {
-      "type": "metric",
-      "x": 0, "y": 0, "width": 12, "height": 6,
-      "properties": {
-        "metrics": [
-          [ "AWS/S3", "BucketSizeBytes", "BucketName", "BUCKET_PLACEHOLDER", "StorageType", "StandardStorage" ],
-          [ ".", "NumberOfObjects", ".", ".", ".", "AllStorageTypes" ]
-        ],
-        "period": 86400,
-        "stat": "Average",
-        "region": "REGION_PLACEHOLDER",
-        "title": "S3 Storage Metrics"
-      }
-    },
-    {
-      "type": "metric",
-      "x": 0, "y": 6, "width": 12, "height": 6,
-      "properties": {
-        "metrics": [
-          [ "AWS/Lambda", "Duration", "FunctionName", "LAMBDA_PLACEHOLDER" ],
-          [ ".", "Invocations", ".", "." ],
-          [ ".", "Errors", ".", "." ]
-        ],
-        "period": 300,
-        "stat": "Average",
-        "region": "REGION_PLACEHOLDER",
-        "title": "Lambda Performance Metrics"
-      }
-    },
-    {
-      "type": "metric",
-      "x": 0, "y": 12, "width": 12, "height": 6,
-      "properties": {
-        "metrics": [
-          [ "AWS/ApiGateway", "Count", "ApiName", "API_PLACEHOLDER" ],
-          [ ".", "Latency", ".", "." ],
-          [ ".", "4XXError", ".", "." ],
-          [ ".", "5XXError", ".", "." ]
-        ],
-        "period": 300,
-        "stat": "Sum",
-        "region": "REGION_PLACEHOLDER",
-        "title": "API Gateway Metrics"
-      }
-    }
-  ]
-}
-EOF
+            {
+              "widgets": [
+                {
+                  "type": "metric",
+                  "x": 0, "y": 0, "width": 12, "height": 6,
+                  "properties": {
+                    "metrics": [
+                      [ "AWS/S3", "BucketSizeBytes", "BucketName", "BUCKET_PLACEHOLDER", "StorageType", "StandardStorage" ],
+                      [ ".", "NumberOfObjects", ".", ".", ".", "AllStorageTypes" ]
+                    ],
+                    "period": 86400,
+                    "stat": "Average",
+                    "region": "REGION_PLACEHOLDER",
+                    "title": "S3 Storage Metrics"
+                  }
+                },
+                {
+                  "type": "metric",
+                  "x": 0, "y": 6, "width": 12, "height": 6,
+                  "properties": {
+                    "metrics": [
+                      [ "AWS/Lambda", "Duration", "FunctionName", "LAMBDA_PLACEHOLDER" ],
+                      [ ".", "Invocations", ".", "." ],
+                      [ ".", "Errors", ".", "." ]
+                    ],
+                    "period": 300,
+                    "stat": "Average",
+                    "region": "REGION_PLACEHOLDER",
+                    "title": "Lambda Performance Metrics"
+                  }
+                },
+                {
+                  "type": "metric",
+                  "x": 0, "y": 12, "width": 12, "height": 6,
+                  "properties": {
+                    "metrics": [
+                      [ "AWS/ApiGateway", "Count", "ApiName", "API_PLACEHOLDER" ],
+                      [ ".", "Latency", ".", "." ],
+                      [ ".", "4XXError", ".", "." ],
+                      [ ".", "5XXError", ".", "." ]
+                    ],
+                    "period": 300,
+                    "stat": "Sum",
+                    "region": "REGION_PLACEHOLDER",
+                    "title": "API Gateway Metrics"
+                  }
+                }
+              ]
+            }
+            EOF
             # Replace placeholders with actual values
             sed -i "s/BUCKET_PLACEHOLDER/$S3_BUCKET/g" dashboard.json
             sed -i "s/LAMBDA_PLACEHOLDER/${{ env.LAMBDA_FUNCTION }}/g" dashboard.json
@@ -597,25 +597,25 @@ EOF
           else
             # Dashboard with only S3 metrics
             cat > dashboard.json << 'EOF'
-{
-  "widgets": [
-    {
-      "type": "metric",
-      "x": 0, "y": 0, "width": 12, "height": 6,
-      "properties": {
-        "metrics": [
-          [ "AWS/S3", "BucketSizeBytes", "BucketName", "BUCKET_PLACEHOLDER", "StorageType", "StandardStorage" ],
-          [ ".", "NumberOfObjects", ".", ".", ".", "AllStorageTypes" ]
-        ],
-        "period": 86400,
-        "stat": "Average",
-        "region": "REGION_PLACEHOLDER",
-        "title": "S3 Storage Metrics"
-      }
-    }
-  ]
-}
-EOF
+            {
+              "widgets": [
+                {
+                  "type": "metric",
+                  "x": 0, "y": 0, "width": 12, "height": 6,
+                  "properties": {
+                    "metrics": [
+                      [ "AWS/S3", "BucketSizeBytes", "BucketName", "BUCKET_PLACEHOLDER", "StorageType", "StandardStorage" ],
+                      [ ".", "NumberOfObjects", ".", ".", ".", "AllStorageTypes" ]
+                    ],
+                    "period": 86400,
+                    "stat": "Average",
+                    "region": "REGION_PLACEHOLDER",
+                    "title": "S3 Storage Metrics"
+                  }
+                }
+              ]
+            }
+            EOF
             # Replace placeholders with actual values
             sed -i "s/BUCKET_PLACEHOLDER/$S3_BUCKET/g" dashboard.json
             sed -i "s/REGION_PLACEHOLDER/${{ env.AWS_REGION }}/g" dashboard.json
@@ -686,29 +686,29 @@ EOF
           
           # Create monitoring dashboard export
           cat > monitoring-artifacts/dashboard-config.json << 'EOF'
-{
-  "dashboard_name": "DASHBOARD_PLACEHOLDER",
-  "created": "TIMESTAMP_PLACEHOLDER",
-  "run_id": "RUN_ID_PLACEHOLDER",
-  "resources": {
-    "s3_bucket": "S3_PLACEHOLDER",
-    "lambda_function": "LAMBDA_PLACEHOLDER",
-    "api_gateway": "API_PLACEHOLDER",
-    "lambda_arn": "LAMBDA_ARN_PLACEHOLDER",
-    "api_id": "API_ID_PLACEHOLDER"
-  },
-  "metrics": {
-    "s3": ["BucketSizeBytes", "NumberOfObjects"],
-    "lambda": ["Duration", "Invocations", "Errors"],
-    "apigateway": ["Count", "Latency", "4XXError", "5XXError"]
-  },
-  "alarms": [
-    "S3-HighObjectCount-RUN_ID_PLACEHOLDER",
-    "Lambda-ErrorRate-RUN_ID_PLACEHOLDER",
-    "Lambda-Duration-RUN_ID_PLACEHOLDER"
-  ]
-}
-EOF
+          {
+            "dashboard_name": "DASHBOARD_PLACEHOLDER",
+            "created": "TIMESTAMP_PLACEHOLDER",
+            "run_id": "RUN_ID_PLACEHOLDER",
+            "resources": {
+              "s3_bucket": "S3_PLACEHOLDER",
+              "lambda_function": "LAMBDA_PLACEHOLDER",
+              "api_gateway": "API_PLACEHOLDER",
+              "lambda_arn": "LAMBDA_ARN_PLACEHOLDER",
+              "api_id": "API_ID_PLACEHOLDER"
+            },
+            "metrics": {
+              "s3": ["BucketSizeBytes", "NumberOfObjects"],
+              "lambda": ["Duration", "Invocations", "Errors"],
+              "apigateway": ["Count", "Latency", "4XXError", "5XXError"]
+            },
+            "alarms": [
+              "S3-HighObjectCount-RUN_ID_PLACEHOLDER",
+              "Lambda-ErrorRate-RUN_ID_PLACEHOLDER",
+              "Lambda-Duration-RUN_ID_PLACEHOLDER"
+            ]
+          }
+          EOF
           
           # Replace placeholders
           sed -i "s/DASHBOARD_PLACEHOLDER/$DASHBOARD_NAME/g" monitoring-artifacts/dashboard-config.json
@@ -724,44 +724,44 @@ EOF
           cat > monitoring-artifacts/monitoring-report.md << 'EOF'
 # 📊 CloudWatch Monitoring Report
 
-**Generated:** TIMESTAMP_PLACEHOLDER
-**Run ID:** RUN_ID_PLACEHOLDER
-**Dashboard:** DASHBOARD_PLACEHOLDER
+          **Generated:** TIMESTAMP_PLACEHOLDER
+          **Run ID:** RUN_ID_PLACEHOLDER
+          **Dashboard:** DASHBOARD_PLACEHOLDER
 
-## 📈 Dashboard Metrics
+          ## 📈 Dashboard Metrics
 
-### S3 Storage Monitoring
-- **BucketSizeBytes**: Total storage usage
-- **NumberOfObjects**: Object count tracking
+          ### S3 Storage Monitoring
+          - **BucketSizeBytes**: Total storage usage
+          - **NumberOfObjects**: Object count tracking
 
-### Lambda Function Monitoring (if deployed)
-- **Duration**: Function execution time
-- **Invocations**: Request count
-- **Errors**: Error rate tracking
+          ### Lambda Function Monitoring (if deployed)
+          - **Duration**: Function execution time
+          - **Invocations**: Request count
+          - **Errors**: Error rate tracking
 
-### API Gateway Monitoring (if deployed)
-- **Count**: Total API requests
-- **Latency**: Response time
-- **4XXError**: Client errors
-- **5XXError**: Server errors
+          ### API Gateway Monitoring (if deployed)
+          - **Count**: Total API requests
+          - **Latency**: Response time
+          - **4XXError**: Client errors
+          - **5XXError**: Server errors
 
-## 🚨 CloudWatch Alarms
+          ## 🚨 CloudWatch Alarms
 
-1. **S3-HighObjectCount**: Triggers when objects > 1000
-2. **Lambda-ErrorRate**: Triggers when error rate > 5% (if Lambda deployed)
-3. **Lambda-Duration**: Triggers when duration > 10s (if Lambda deployed)
+          1. **S3-HighObjectCount**: Triggers when objects > 1000
+          2. **Lambda-ErrorRate**: Triggers when error rate > 5% (if Lambda deployed)
+          3. **Lambda-Duration**: Triggers when duration > 10s (if Lambda deployed)
 
-## 🔗 Access Dashboard
+          ## 🔗 Access Dashboard
 
-**CloudWatch URL:** https://REGION_PLACEHOLDER.console.aws.amazon.com/cloudwatch/home?region=REGION_PLACEHOLDER#dashboards:name=DASHBOARD_PLACEHOLDER
+          **CloudWatch URL:** https://REGION_PLACEHOLDER.console.aws.amazon.com/cloudwatch/home?region=REGION_PLACEHOLDER#dashboards:name=DASHBOARD_PLACEHOLDER
 
-## 💡 Monitoring Best Practices
+          ## 💡 Monitoring Best Practices
 
-- Review metrics daily for the first week
-- Set up SNS notifications for critical alarms
-- Monitor costs alongside performance metrics
-- Consider custom metrics for business KPIs
-EOF
+          - Review metrics daily for the first week
+          - Set up SNS notifications for critical alarms
+          - Monitor costs alongside performance metrics
+          - Consider custom metrics for business KPIs
+          EOF
           
           # Replace placeholders
           sed -i "s/TIMESTAMP_PLACEHOLDER/$(date -u +%Y-%m-%dT%H:%M:%SZ)/g" monitoring-artifacts/monitoring-report.md
