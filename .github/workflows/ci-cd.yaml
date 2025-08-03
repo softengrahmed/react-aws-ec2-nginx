@@ -722,7 +722,7 @@ jobs:
           
           # Create monitoring report
           cat > monitoring-artifacts/monitoring-report.md << 'EOF'
-# 📊 CloudWatch Monitoring Report
+          # 📊 CloudWatch Monitoring Report
 
           **Generated:** TIMESTAMP_PLACEHOLDER
           **Run ID:** RUN_ID_PLACEHOLDER
@@ -998,7 +998,7 @@ jobs:
         
         log_stage "Generating enhanced report with monitoring integration"
         cat > "$RUN_FOLDER/deployment-report.md" << 'EOF'
-# 🚀 Progressive Resilient Deployment Report
+        # 🚀 Progressive Resilient Deployment Report
 
         **Generated on:** TIMESTAMP_PLACEHOLDER
         **Pipeline Run ID:** RUN_ID_PLACEHOLDER
