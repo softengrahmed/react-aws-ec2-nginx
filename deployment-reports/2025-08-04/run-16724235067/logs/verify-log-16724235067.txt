@@ -1,0 +1,38 @@
+=============================================
+DEPLOYMENT VERIFICATION & CONNECTIVITY LOG
+=============================================
+Run ID: 16724235067
+Verification Target URLs:
+  Website: http://react-serverless-16724235067.s3-website-us-east-1.amazonaws.com
+  CloudFront: 
+  API: 
+Deployment Type: s3_website
+Max Retries: 3
+=============================================
+
+[2025-08-04 13:18:00] [VERIFY-STAGE] Starting progressive verification
+[2025-08-04 13:18:00] [VERIFY-STAGE] Verification configuration:
+[2025-08-04 13:18:00] [VERIFY-STAGE]    Deployment type: s3_website
+[2025-08-04 13:18:00] [VERIFY-STAGE]    Website URL: http://react-serverless-16724235067.s3-website-us-east-1.amazonaws.com
+[2025-08-04 13:18:00] [VERIFY-STAGE]    CloudFront URL: 
+[2025-08-04 13:18:00] [VERIFY-STAGE]    API URL: 
+[2025-08-04 13:18:00] [VERIFY-STAGE] URLs prepared for testing: 1 total
+[2025-08-04 13:18:00] [VERIFY-STAGE]    URL 1: http://react-serverless-16724235067.s3-website-us-east-1.amazonaws.com
+[2025-08-04 13:18:00] [VERIFY-STAGE] Verification attempt 1/3
+[2025-08-04 13:18:00] [VERIFY-STAGE] Testing connectivity to: http://react-serverless-16724235067.s3-website-us-east-1.amazonaws.com
+[2025-08-04 13:18:00] [VERIFY-STAGE]    URL type detected: s3
+[2025-08-04 13:18:00] [VERIFY-STAGE]    Performing HTTP connectivity test...
+[2025-08-04 13:18:00] [VERIFY-STAGE]    Response details:
+[2025-08-04 13:18:00] [VERIFY-STAGE]      HTTP Status: 200
+[2025-08-04 13:18:00] [VERIFY-STAGE]      Response Time: 0.127716s
+[2025-08-04 13:18:00] [VERIFY-STAGE]      Response Size: 656 bytes
+[2025-08-04 13:18:00] [VERIFY-STAGE]      Content validation: ✅ Valid HTML content detected
+[2025-08-04 13:18:00] [VERIFY-STAGE]    ✅ http://react-serverless-16724235067.s3-website-us-east-1.amazonaws.com verification PASSED
+[2025-08-04 13:18:00] [VERIFY-STAGE]    ---
+[2025-08-04 13:18:00] [VERIFY-STAGE] Verification attempt 1 results:
+[2025-08-04 13:18:00] [VERIFY-STAGE]    Successful tests: 1/1
+[2025-08-04 13:18:00] [VERIFY-STAGE]    Success rate: 100%
+[2025-08-04 13:18:00] [VERIFY-STAGE]    ✅ s3: PASS (200, 0.127716s)
+[2025-08-04 13:18:00] [VERIFY-STAGE] ✅ Verification successful on attempt 1
+[2025-08-04 13:18:00] [VERIFY-STAGE]    Working endpoints: 1/1
+[2025-08-04 13:18:00] [VERIFY-STAGE]    Deployment is accessible to users
