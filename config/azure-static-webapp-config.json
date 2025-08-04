@@ -1,0 +1,357 @@
+{
+  "//": "========================================================================================",
+  "//": "AZURE STATIC WEB APPS CONFIGURATION",
+  "//": "========================================================================================",
+  "//": "This configuration file defines the Azure Static Web Apps settings for React deployment",
+  "//": "Optimized for Free Tier with advanced routing, security headers, and performance settings",
+  "//": "========================================================================================",
+  
+  "globalHeaders": {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "X-XSS-Protection": "1; mode=block",
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https:",
+    "Cache-Control": "public, max-age=31536000, immutable"
+  },
+  
+  "routes": [
+    {
+      "route": "/api/*",
+      "allowedRoles": ["anonymous"]
+    },
+    {
+      "route": "/admin/*",
+      "allowedRoles": ["administrator"]
+    },
+    {
+      "route": "/login",
+      "rewrite": "/login.html"
+    },
+    {
+      "route": "/logout",
+      "redirect": "/.auth/logout"
+    },
+    {
+      "route": "/.well-known/*",
+      "headers": {
+        "Cache-Control": "public, max-age=86400"
+      }
+    },
+    {
+      "route": "/static/*",
+      "headers": {
+        "Cache-Control": "public, max-age=31536000, immutable"
+      }
+    },
+    {
+      "route": "/manifest.json",
+      "headers": {
+        "Cache-Control": "public, max-age=86400"
+      }
+    },
+    {
+      "route": "/favicon.ico",
+      "headers": {
+        "Cache-Control": "public, max-age=86400"
+      }
+    },
+    {
+      "route": "/*",
+      "rewrite": "/index.html"
+    }
+  ],
+  
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": [
+      "/api/*",
+      "/static/*",
+      "/*.{css,scss,js,png,gif,ico,jpg,svg,woff,woff2,ttf,eot}"
+    ]
+  },
+  
+  "mimeTypes": {
+    ".json": "application/json",
+    ".js": "application/javascript",
+    ".css": "text/css",
+    ".html": "text/html",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".gif": "image/gif",
+    ".svg": "image/svg+xml",
+    ".ico": "image/x-icon",
+    ".woff": "font/woff",
+    ".woff2": "font/woff2",
+    ".ttf": "font/ttf",
+    ".eot": "application/vnd.ms-fontobject"
+  },
+  
+  "responseOverrides": {
+    "400": {
+      "rewrite": "/error/400.html",
+      "statusCode": 400
+    },
+    "401": {
+      "rewrite": "/error/401.html", 
+      "statusCode": 401
+    },
+    "403": {
+      "rewrite": "/error/403.html",
+      "statusCode": 403
+    },
+    "404": {
+      "rewrite": "/error/404.html",
+      "statusCode": 404
+    },
+    "500": {
+      "rewrite": "/error/500.html",
+      "statusCode": 500
+    }
+  },
+  
+  "platform": {
+    "apiRuntime": "node:18"
+  },
+  
+  "networking": {
+    "allowedIpRanges": []
+  },
+  
+  "auth": {
+    "rolesSource": "/api/GetRoles",
+    "identityProviders": {
+      "azureActiveDirectory": {
+        "userDetailsClaim": "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name",
+        "registration": {
+          "openIdIssuer": "https://login.microsoftonline.com/{tenantId}/v2.0",
+          "clientIdSettingName": "AZURE_CLIENT_ID",
+          "clientSecretSettingName": "AZURE_CLIENT_SECRET"
+        }
+      },
+      "github": {
+        "registration": {
+          "clientIdSettingName": "GITHUB_CLIENT_ID",
+          "clientSecretSettingName": "GITHUB_CLIENT_SECRET"
+        }
+      },
+      "twitter": {
+        "registration": {
+          "consumerKeySettingName": "TWITTER_CONSUMER_KEY",
+          "consumerSecretSettingName": "TWITTER_CONSUMER_SECRET"
+        }
+      }
+    }
+  },
+  
+  "//": "========================================================================================",
+  "//": "FREE TIER OPTIMIZATIONS",
+  "//": "========================================================================================",
+  
+  "freeTierOptimizations": {
+    "bandwidthLimit": "100GB/month",
+    "storageLimit": "0.5GB",
+    "functionsLimit": "2 functions",
+    "customDomains": "2 domains",
+    "ssl": "included",
+    "cdn": "included",
+    "globalDistribution": "included"
+  },
+  
+  "performanceOptimizations": {
+    "compression": {
+      "enabled": true,
+      "algorithms": ["gzip", "brotli"],
+      "minBytes": 1024
+    },
+    "caching": {
+      "staticAssets": "31536000",
+      "htmlFiles": "86400",
+      "apiResponses": "300"
+    },
+    "http2": {
+      "enabled": true,
+      "serverPush": true
+    }
+  },
+  
+  "monitoring": {
+    "applicationInsights": {
+      "enabled": true,
+      "connectionStringSettingName": "APPLICATIONINSIGHTS_CONNECTION_STRING"
+    },
+    "diagnosticSettings": {
+      "httpLogs": true,
+      "detailedErrors": true,
+      "failedRequestTracing": true
+    }
+  },
+  
+  "//": "========================================================================================",
+  "//": "ENVIRONMENT SPECIFIC CONFIGURATIONS",
+  "//": "========================================================================================",
+  
+  "environments": {
+    "production": {
+      "appSettings": {
+        "REACT_APP_ENV": "production",
+        "REACT_APP_API_URL": "https://api.yourdomain.com",
+        "REACT_APP_VERSION": "1.0.0",
+        "NODE_ENV": "production"
+      },
+      "customDomain": "yourdomain.com",
+      "certificateSource": "free"
+    },
+    "staging": {
+      "appSettings": {
+        "REACT_APP_ENV": "staging",
+        "REACT_APP_API_URL": "https://api-staging.yourdomain.com",
+        "REACT_APP_VERSION": "1.0.0-staging",
+        "NODE_ENV": "production"
+      }
+    },
+    "development": {
+      "appSettings": {
+        "REACT_APP_ENV": "development",
+        "REACT_APP_API_URL": "http://localhost:3001",
+        "REACT_APP_VERSION": "1.0.0-dev",
+        "NODE_ENV": "development"
+      }
+    }
+  },
+  
+  "//": "========================================================================================",
+  "//": "DEPLOYMENT CONFIGURATION",
+  "//": "========================================================================================",
+  
+  "build": {
+    "appLocation": "/",
+    "apiLocation": "api",
+    "outputLocation": "build",
+    "skipAppBuild": false,
+    "appBuildCommand": "npm run build",
+    "apiBuildCommand": "",
+    "environmentVariables": {
+      "NODE_OPTIONS": "--max-old-space-size=4096",
+      "GENERATE_SOURCEMAP": "false",
+      "INLINE_RUNTIME_CHUNK": "false"
+    }
+  },
+  
+  "deployment": {
+    "productionBranch": "main",
+    "stagingBranch": "develop",
+    "previewBranches": ["feature/*", "hotfix/*"],
+    "autoSwap": false,
+    "skipGithubActionWorkflowGeneration": true
+  },
+  
+  "//": "========================================================================================",
+  "//": "SECURITY CONFIGURATION",
+  "//": "========================================================================================",
+  
+  "security": {
+    "allowedOrigins": [
+      "https://yourdomain.com",
+      "https://www.yourdomain.com",
+      "https://staging.yourdomain.com"
+    ],
+    "maxFileSize": "10MB",
+    "rateLimiting": {
+      "enabled": true,
+      "requestsPerMinute": 1000,
+      "requestsPerHour": 10000
+    },
+    "ipFiltering": {
+      "enabled": false,
+      "allowList": [],
+      "denyList": []
+    }
+  },
+  
+  "//": "========================================================================================",
+  "//": "COST OPTIMIZATION SETTINGS",
+  "//": "========================================================================================",
+  
+  "costOptimization": {
+    "autoScaling": {
+      "enabled": true,
+      "minInstances": 0,
+      "maxInstances": 1
+    },
+    "coldStart": {
+      "warmupEnabled": false,
+      "timeout": "00:05:00"
+    },
+    "resourceCleanup": {
+      "previewEnvironments": {
+        "maxAge": "7days",
+        "autoDelete": true
+      },
+      "logRetention": "30days",
+      "metricsRetention": "30days"
+    }
+  },
+  
+  "//": "========================================================================================",
+  "//": "INTEGRATION SETTINGS",
+  "//": "========================================================================================",
+  
+  "integrations": {
+    "github": {
+      "repositoryUrl": "https://github.com/softengrahmed/react-aws-ec2-nginx",
+      "branch": "main",
+      "workflowFile": ".github/workflows/azure-static-webapp.yml"
+    },
+    "azureDevOps": {
+      "enabled": false
+    },
+    "applicationInsights": {
+      "enabled": true,
+      "samplingRate": 100
+    }
+  },
+  
+  "//": "========================================================================================",
+  "//": "TROUBLESHOOTING AND DEBUGGING",
+  "//": "========================================================================================",
+  
+  "debugging": {
+    "enableConsoleLogging": false,
+    "enableDetailedErrors": true,
+    "enableSourceMaps": false,
+    "logLevel": "Information"
+  },
+  
+  "troubleshooting": {
+    "common_issues": {
+      "routing_404": "Ensure navigationFallback is configured for SPA routing",
+      "static_assets": "Check outputLocation matches your build directory",
+      "api_cors": "Configure allowedOrigins in security settings",
+      "custom_domain": "Verify DNS CNAME record points to Azure Static Web Apps",
+      "ssl_certificate": "Free SSL certificates are automatically provisioned"
+    },
+    "performance_tips": {
+      "bundle_optimization": "Use webpack-bundle-analyzer to identify large dependencies",
+      "image_optimization": "Compress images and use modern formats (WebP, AVIF)",
+      "code_splitting": "Implement React.lazy() for component-based code splitting",
+      "caching_strategy": "Leverage browser caching with proper cache headers"
+    }
+  },
+  
+  "//": "========================================================================================",
+  "//": "CONFIGURATION VALIDATION",
+  "//": "========================================================================================",
+  
+  "validation": {
+    "schema_version": "1.0",
+    "last_updated": "2025-01-20",
+    "validated_with": "Azure Static Web Apps CLI v1.1.0",
+    "compatibility": {
+      "react": ">=16.8.0",
+      "node": ">=18.0.0",
+      "npm": ">=8.0.0"
+    }
+  }
+}
