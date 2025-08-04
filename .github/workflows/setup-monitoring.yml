@@ -1,0 +1,882 @@
+name: Setup Monitoring and Alerting
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/**'
+      - 'package.json'
+      - 'package-lock.json'
+  workflow_dispatch:
+    inputs:
+      monitoring_level:
+        description: 'Level of monitoring to setup'
+        required: true
+        default: 'standard'
+        type: choice
+        options:
+        - basic
+        - standard  
+        - comprehensive
+      notification_channels:
+        description: 'Notification channels (comma-separated)'
+        required: false
+        default: 'slack,email'
+        type: string
+      reset_configuration:
+        description: 'Reset existing monitoring configuration'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  MONITORING_LEVEL: ${{ github.event.inputs.monitoring_level || 'standard' }}
+  NOTIFICATION_CHANNELS: ${{ github.event.inputs.notification_channels || 'slack,email' }}
+  RESET_CONFIG: ${{ github.event.inputs.reset_configuration || 'false' }}
+
+jobs:
+  setup_application_monitoring:
+    runs-on: ubuntu-latest
+    name: Setup Application Performance Monitoring
+    environment: production
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18.x'
+        cache: 'npm'
+
+    # Setup Application Insights or similar APM
+    - name: Configure Application Insights
+      run: |
+        echo "Setting up Application Performance Monitoring..."
+        
+        # Create monitoring configuration
+        mkdir -p monitoring/config
+        
+        cat > monitoring/config/app-insights.json << 'EOF'
+        {
+          "applicationInsights": {
+            "connectionString": "${{ secrets.APPLICATIONINSIGHTS_CONNECTION_STRING }}",
+            "enableAutoCollectConsole": true,
+            "enableAutoCollectExceptions": true,
+            "enableAutoCollectHeartbeat": true,
+            "enableAutoCollectPerformance": true,
+            "enableAutoCollectRequests": true,
+            "enableAutoDependencyCorrelation": true,
+            "enableAutoCollectDependencies": true,
+            "enableUsageTracking": true,
+            "maxBatchSize": 250,
+            "maxBatchIntervalMs": 15000,
+            "disableAppInsights": false,
+            "samplingPercentage": 100,
+            "correlationIdRetryIntervalMs": 30000,
+            "correlationHeaderExcludedDomains": [
+              "*.blob.core.windows.net",
+              "*.queue.core.windows.net"
+            ]
+          },
+          "customMetrics": {
+            "pageLoadTime": true,
+            "userInteractions": true,
+            "apiResponseTimes": true,
+            "errorRates": true,
+            "resourceUsage": true
+          },
+          "alerting": {
+            "responseTimeThreshold": 2000,
+            "errorRateThreshold": 5,
+            "availabilityThreshold": 99.5
+          }
+        }
+        EOF
+
+    # Setup real user monitoring
+    - name: Configure Real User Monitoring
+      run: |
+        echo "Setting up Real User Monitoring (RUM)..."
+        
+        cat > monitoring/config/rum-config.js << 'EOF'
+        // Real User Monitoring Configuration
+        const rumConfig = {
+          // Core Web Vitals tracking
+          coreWebVitals: {
+            enabled: true,
+            thresholds: {
+              LCP: 2500,  // Largest Contentful Paint
+              FID: 100,   // First Input Delay  
+              CLS: 0.1,   // Cumulative Layout Shift
+              FCP: 1800,  // First Contentful Paint
+              TTFB: 600   // Time to First Byte
+            }
+          },
+          
+          // User experience tracking
+          userExperience: {
+            trackUserSessions: true,
+            trackPageViews: true,
+            trackClickEvents: true,
+            trackFormSubmissions: true,
+            trackScrollDepth: true,
+            trackTimeOnPage: true
+          },
+          
+          // Error tracking
+          errorTracking: {
+            captureUnhandledRejections: true,
+            captureConsoleErrors: true,
+            captureNetworkErrors: true,
+            maxErrorsPerSession: 50
+          },
+          
+          // Performance monitoring
+          performance: {
+            trackResourceTiming: true,
+            trackLongTasks: true,
+            trackMemoryUsage: true,
+            trackConnectionType: true
+          },
+          
+          // Sampling configuration
+          sampling: {
+            rate: '${{ env.MONITORING_LEVEL }}' === 'comprehensive' ? 1.0 : 0.1,
+            errorSampling: 1.0
+          }
+        };
+        
+        export default rumConfig;
+        EOF
+
+    # Setup synthetic monitoring
+    - name: Configure Synthetic Monitoring
+      run: |
+        echo "Setting up Synthetic Monitoring..."
+        
+        mkdir -p monitoring/synthetic
+        
+        cat > monitoring/synthetic/health-checks.yml << 'EOF'
+        # Synthetic monitoring configuration
+        healthChecks:
+          - name: "Homepage Load Test"
+            url: "https://${{ secrets.AZURE_STATIC_WEB_APP_URL }}"
+            method: GET
+            expectedStatus: 200
+            timeout: 30000
+            interval: 300  # 5 minutes
+            locations:
+              - "East US"
+              - "West Europe"
+              - "Southeast Asia"
+            assertions:
+              - "response.time < 3000"
+              - "response.body.includes('React App')"
+              - "response.headers['content-type'].includes('text/html')"
+          
+          - name: "API Health Check"
+            url: "https://${{ secrets.API_BASE_URL }}/health"
+            method: GET
+            expectedStatus: 200
+            timeout: 15000
+            interval: 60   # 1 minute
+            locations:
+              - "East US"
+            assertions:
+              - "response.time < 1000"
+              - "response.json.status == 'healthy'"
+          
+          - name: "Critical User Journey"
+            type: "multi-step"
+            interval: 600  # 10 minutes
+            steps:
+              - name: "Load Homepage"
+                url: "https://${{ secrets.AZURE_STATIC_WEB_APP_URL }}"
+                assertions:
+                  - "response.time < 3000"
+                  - "response.status == 200"
+              
+              - name: "Navigate to About"
+                url: "https://${{ secrets.AZURE_STATIC_WEB_APP_URL }}/about"
+                assertions:
+                  - "response.time < 2000"
+                  - "response.status == 200"
+        
+        alerting:
+          failureThreshold: 2
+          successThreshold: 3
+          notificationChannels:
+            - slack
+            - email
+        EOF
+
+  setup_infrastructure_monitoring:
+    runs-on: ubuntu-latest
+    name: Setup Infrastructure Monitoring
+    environment: production
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # Setup Azure Monitor for infrastructure
+    - name: Configure Azure Monitor
+      run: |
+        echo "Setting up Azure Monitor for infrastructure..."
+        
+        mkdir -p monitoring/infrastructure
+        
+        cat > monitoring/infrastructure/azure-monitor.json << 'EOF'
+        {
+          "workspaceId": "${{ secrets.LOG_ANALYTICS_WORKSPACE_ID }}",
+          "resources": {
+            "staticWebApp": {
+              "resourceId": "${{ secrets.AZURE_STATIC_WEB_APP_RESOURCE_ID }}",
+              "metrics": [
+                "Requests",
+                "DataOut",
+                "Http2xx",
+                "Http3xx",
+                "Http4xx",
+                "Http5xx",
+                "ResponseTime"
+              ],
+              "logs": [
+                "StaticWebAppRequestLogs",
+                "StaticWebAppFunctionLogs"
+              ]
+            },
+            "cdn": {
+              "resourceId": "${{ secrets.AZURE_CDN_RESOURCE_ID }}",
+              "metrics": [
+                "RequestCount",
+                "BytesHitRatio",
+                "ResponseSize",
+                "TotalLatency"
+              ]
+            }
+          },
+          "alertRules": [
+            {
+              "name": "High Error Rate",
+              "condition": "Http5xx > 10 over 5 minutes",
+              "severity": "Critical",
+              "actions": ["NotificationGroup"]
+            },
+            {
+              "name": "Slow Response Time", 
+              "condition": "ResponseTime > 3000ms over 10 minutes",
+              "severity": "Warning",
+              "actions": ["NotificationGroup"]
+            },
+            {
+              "name": "Low Availability",
+              "condition": "Availability < 99% over 15 minutes",
+              "severity": "Critical",
+              "actions": ["NotificationGroup", "PagerDuty"]
+            }
+          ]
+        }
+        EOF
+
+    # Setup custom metrics collection
+    - name: Configure Custom Metrics
+      run: |
+        echo "Setting up custom metrics collection..."
+        
+        cat > monitoring/infrastructure/custom-metrics.js << 'EOF'
+        // Custom metrics collection for application monitoring
+        class CustomMetrics {
+          constructor() {
+            this.metrics = {
+              pageViews: 0,
+              uniqueUsers: new Set(),
+              apiCalls: 0,
+              errors: 0,
+              performanceMetrics: []
+            };
+          }
+          
+          // Track page views
+          trackPageView(page, user) {
+            this.metrics.pageViews++;
+            this.metrics.uniqueUsers.add(user);
+            
+            // Send to monitoring service
+            this.sendMetric('pageview', {
+              page: page,
+              timestamp: Date.now(),
+              user: user
+            });
+          }
+          
+          // Track API performance
+          trackApiCall(endpoint, responseTime, status) {
+            this.metrics.apiCalls++;
+            
+            if (status >= 400) {
+              this.metrics.errors++;
+            }
+            
+            this.sendMetric('api_call', {
+              endpoint: endpoint,
+              responseTime: responseTime,
+              status: status,
+              timestamp: Date.now()
+            });
+          }
+          
+          // Track Core Web Vitals
+          trackWebVital(name, value, id) {
+            this.metrics.performanceMetrics.push({
+              name: name,
+              value: value,
+              id: id,
+              timestamp: Date.now()
+            });
+            
+            this.sendMetric('web_vital', {
+              name: name,
+              value: value,
+              id: id,
+              timestamp: Date.now()
+            });
+          }
+          
+          // Send metric to monitoring service
+          sendMetric(type, data) {
+            if (typeof appInsights !== 'undefined') {
+              appInsights.trackEvent(type, data);
+            }
+            
+            // Also send to custom endpoint if configured
+            if (window.MONITORING_ENDPOINT) {
+              fetch(window.MONITORING_ENDPOINT, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  type: type,
+                  data: data,
+                  sessionId: this.getSessionId(),
+                  userAgent: navigator.userAgent,
+                  url: window.location.href
+                })
+              }).catch(err => console.warn('Failed to send custom metric:', err));
+            }
+          }
+          
+          getSessionId() {
+            let sessionId = sessionStorage.getItem('monitoring_session_id');
+            if (!sessionId) {
+              sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+              sessionStorage.setItem('monitoring_session_id', sessionId);
+            }
+            return sessionId;
+          }
+        }
+        
+        export default CustomMetrics;
+        EOF
+
+  setup_alerting:
+    runs-on: ubuntu-latest
+    name: Setup Alerting and Notifications
+    environment: production
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # Setup alert rules
+    - name: Configure Alert Rules
+      run: |
+        echo "Setting up alert rules and notifications..."
+        
+        mkdir -p monitoring/alerts
+        
+        cat > monitoring/alerts/alert-rules.yml << 'EOF'
+        # Alert rules configuration
+        alertGroups:
+          - name: "Application Health"
+            rules:
+              - alert: "ApplicationDown"
+                expr: "up == 0"
+                for: "2m"
+                labels:
+                  severity: "critical"
+                annotations:
+                  summary: "Application is down"
+                  description: "Application has been down for more than 2 minutes"
+              
+              - alert: "HighErrorRate"
+                expr: "(sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m]))) * 100 > 5"
+                for: "5m"
+                labels:
+                  severity: "warning"
+                annotations:
+                  summary: "High error rate detected"
+                  description: "Error rate is above 5% for 5 minutes"
+              
+              - alert: "SlowResponseTime"
+                expr: "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) > 2"
+                for: "10m"
+                labels:
+                  severity: "warning"
+                annotations:
+                  summary: "Slow response times"
+                  description: "95th percentile response time is above 2 seconds"
+          
+          - name: "Infrastructure"
+            rules:
+              - alert: "HighCPUUsage"
+                expr: "cpu_usage_percent > 80"
+                for: "15m"
+                labels:
+                  severity: "warning"
+                annotations:
+                  summary: "High CPU usage"
+                  description: "CPU usage is above 80% for 15 minutes"
+              
+              - alert: "HighMemoryUsage"
+                expr: "memory_usage_percent > 90"
+                for: "10m"
+                labels:
+                  severity: "critical"
+                annotations:
+                  summary: "High memory usage"
+                  description: "Memory usage is above 90% for 10 minutes"
+              
+              - alert: "DiskSpaceLow"
+                expr: "disk_free_percent < 10"
+                for: "5m"
+                labels:
+                  severity: "critical"
+                annotations:
+                  summary: "Low disk space"
+                  description: "Available disk space is below 10%"
+          
+          - name: "Business Metrics"
+            rules:
+              - alert: "LowUserActivity"
+                expr: "active_users_5m < 1"
+                for: "30m"
+                labels:
+                  severity: "info"
+                annotations:
+                  summary: "Low user activity"
+                  description: "No active users detected for 30 minutes"
+              
+              - alert: "HighBounceRate"
+                expr: "bounce_rate_percent > 70"
+                for: "1h"
+                labels:
+                  severity: "warning"
+                annotations:
+                  summary: "High bounce rate"
+                  description: "Bounce rate is above 70% for 1 hour"
+        
+        # Notification channels
+        notificationChannels:
+          slack:
+            enabled: true
+            webhook: "${{ secrets.SLACK_WEBHOOK_URL }}"
+            channel: "#alerts"
+            username: "MonitoringBot"
+            iconEmoji: ":warning:"
+            titleTemplate: "🚨 {{ .GroupLabels.alertname }}"
+            textTemplate: |
+              {{ range .Alerts }}
+              *Alert:* {{ .Annotations.summary }}
+              *Description:* {{ .Annotations.description }}
+              *Severity:* {{ .Labels.severity }}
+              *Time:* {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+              {{ end }}
+          
+          email:
+            enabled: true
+            smtpServer: "${{ secrets.SMTP_SERVER }}"
+            smtpPort: 587
+            username: "${{ secrets.SMTP_USERNAME }}"
+            password: "${{ secrets.SMTP_PASSWORD }}"
+            from: "alerts@yourcompany.com"
+            to:
+              - "devops@yourcompany.com"
+              - "oncall@yourcompany.com"
+            subject: "[ALERT] {{ .GroupLabels.alertname }}"
+            bodyTemplate: |
+              Alert Details:
+              
+              {{ range .Alerts }}
+              Alert: {{ .Annotations.summary }}
+              Description: {{ .Annotations.description }}
+              Severity: {{ .Labels.severity }}
+              Started: {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+              
+              {{ end }}
+          
+          pagerduty:
+            enabled: false
+            integrationKey: "${{ secrets.PAGERDUTY_INTEGRATION_KEY }}"
+            severity: "critical"
+        EOF
+
+    # Setup dashboard configurations
+    - name: Configure Monitoring Dashboards
+      run: |
+        echo "Setting up monitoring dashboards..."
+        
+        mkdir -p monitoring/dashboards
+        
+        cat > monitoring/dashboards/application-dashboard.json << 'EOF'
+        {
+          "dashboard": {
+            "title": "React App Monitoring Dashboard",
+            "tags": ["react", "monitoring", "production"],
+            "timezone": "UTC",
+            "refresh": "30s",
+            "time": {
+              "from": "now-1h",
+              "to": "now"
+            },
+            "panels": [
+              {
+                "title": "Application Status",
+                "type": "stat",
+                "targets": [
+                  {
+                    "expr": "up",
+                    "legendFormat": "Status"
+                  }
+                ],
+                "fieldConfig": {
+                  "defaults": {
+                    "mappings": [
+                      {
+                        "options": {
+                          "0": {
+                            "text": "DOWN",
+                            "color": "red"
+                          },
+                          "1": {
+                            "text": "UP",
+                            "color": "green"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "title": "Request Rate",
+                "type": "graph",
+                "targets": [
+                  {
+                    "expr": "sum(rate(http_requests_total[5m]))",
+                    "legendFormat": "Requests/sec"
+                  }
+                ]
+              },
+              {
+                "title": "Response Time (95th percentile)",
+                "type": "graph",
+                "targets": [
+                  {
+                    "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))",
+                    "legendFormat": "95th percentile"
+                  }
+                ]
+              },
+              {
+                "title": "Error Rate",
+                "type": "graph",
+                "targets": [
+                  {
+                    "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) / sum(rate(http_requests_total[5m])) * 100",
+                    "legendFormat": "Error Rate %"
+                  }
+                ]
+              },
+              {
+                "title": "Core Web Vitals",
+                "type": "graph",
+                "targets": [
+                  {
+                    "expr": "avg(largest_contentful_paint_seconds)",
+                    "legendFormat": "LCP"
+                  },
+                  {
+                    "expr": "avg(first_input_delay_seconds)",
+                    "legendFormat": "FID"
+                  },
+                  {
+                    "expr": "avg(cumulative_layout_shift)",
+                    "legendFormat": "CLS"
+                  }
+                ]
+              },
+              {
+                "title": "Active Users",
+                "type": "stat",
+                "targets": [
+                  {
+                    "expr": "active_users_5m",
+                    "legendFormat": "Active Users (5min)"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+        EOF
+
+  setup_log_aggregation:
+    runs-on: ubuntu-latest
+    name: Setup Log Aggregation
+    environment: production
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # Configure log aggregation
+    - name: Setup Log Aggregation
+      run: |
+        echo "Setting up log aggregation and analysis..."
+        
+        mkdir -p monitoring/logging
+        
+        cat > monitoring/logging/log-config.yml << 'EOF'
+        # Log aggregation configuration
+        logging:
+          level: "info"
+          format: "json"
+          
+          # Log sources
+          sources:
+            - name: "application"
+              type: "file"
+              path: "/var/log/app/*.log"
+              multiline:
+                pattern: '^\d{4}-\d{2}-\d{2}'
+                negate: true
+                match: after
+            
+            - name: "access"
+              type: "file"
+              path: "/var/log/nginx/access.log"
+              format: "nginx"
+            
+            - name: "error"
+              type: "file"
+              path: "/var/log/nginx/error.log"
+              format: "nginx_error"
+            
+            - name: "browser"
+              type: "javascript"
+              endpoint: "/api/logs"
+              levels: ["error", "warn", "info"]
+          
+          # Processing rules
+          processing:
+            - name: "parse_json"
+              type: "json"
+              field: "message"
+            
+            - name: "add_timestamp"
+              type: "timestamp"
+              field: "@timestamp"
+              format: "2006-01-02T15:04:05.000Z"
+            
+            - name: "extract_user_id"
+              type: "regex"
+              field: "message"
+              pattern: "user_id=([a-zA-Z0-9-]+)"
+              target: "user_id"
+            
+            - name: "classify_severity"
+              type: "conditional"
+              conditions:
+                - if: "status >= 500"
+                  then: "severity = 'critical'"
+                - if: "status >= 400"
+                  then: "severity = 'warning'"
+                - else: "severity = 'info'"
+          
+          # Output destinations
+          outputs:
+            - name: "elasticsearch"
+              type: "elasticsearch"
+              hosts: ["${{ secrets.ELASTICSEARCH_URL }}"]
+              index: "app-logs-%{+YYYY.MM.dd}"
+              username: "${{ secrets.ELASTICSEARCH_USERNAME }}"
+              password: "${{ secrets.ELASTICSEARCH_PASSWORD }}"
+            
+            - name: "azure_logs"
+              type: "azure_log_analytics"
+              workspaceId: "${{ secrets.LOG_ANALYTICS_WORKSPACE_ID }}"
+              workspaceKey: "${{ secrets.LOG_ANALYTICS_WORKSPACE_KEY }}"
+              logType: "ApplicationLogs"
+          
+          # Alerting on logs
+          alerts:
+            - name: "high_error_rate"
+              query: "status:[500 TO 599]"
+              timeframe: "5m"
+              threshold: 10
+              action: "webhook"
+              webhook: "${{ secrets.LOG_ALERT_WEBHOOK }}"
+            
+            - name: "security_events"
+              query: "message:*authentication failed* OR message:*unauthorized*"
+              timeframe: "1m"
+              threshold: 1
+              action: "email"
+              email: "security@yourcompany.com"
+        EOF
+
+  monitoring_validation:
+    needs: [setup_application_monitoring, setup_infrastructure_monitoring, setup_alerting, setup_log_aggregation]
+    runs-on: ubuntu-latest
+    name: Validate Monitoring Setup
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Validate Monitoring Configuration
+      run: |
+        echo "Validating monitoring setup..."
+        
+        # Check if all monitoring files were created
+        REQUIRED_FILES=(
+          "monitoring/config/app-insights.json"
+          "monitoring/config/rum-config.js"
+          "monitoring/synthetic/health-checks.yml"
+          "monitoring/infrastructure/azure-monitor.json"
+          "monitoring/infrastructure/custom-metrics.js"
+          "monitoring/alerts/alert-rules.yml"
+          "monitoring/dashboards/application-dashboard.json"
+          "monitoring/logging/log-config.yml"
+        )
+        
+        MISSING_FILES=0
+        
+        for file in "${REQUIRED_FILES[@]}"; do
+          if [ -f "$file" ]; then
+            echo "✅ $file exists"
+          else
+            echo "❌ $file is missing"
+            MISSING_FILES=$((MISSING_FILES + 1))
+          fi
+        done
+        
+        if [ $MISSING_FILES -eq 0 ]; then
+          echo "\n✅ All monitoring configuration files created successfully"
+        else
+          echo "\n❌ $MISSING_FILES monitoring configuration files are missing"
+          exit 1
+        fi
+        
+        # Validate JSON files
+        echo "\nValidating JSON configuration files..."
+        
+        JSON_FILES=(
+          "monitoring/config/app-insights.json"
+          "monitoring/infrastructure/azure-monitor.json"
+          "monitoring/dashboards/application-dashboard.json"
+        )
+        
+        for file in "${JSON_FILES[@]}"; do
+          if [ -f "$file" ]; then
+            if jq empty "$file" 2>/dev/null; then
+              echo "✅ $file is valid JSON"
+            else
+              echo "❌ $file contains invalid JSON"
+              exit 1
+            fi
+          fi
+        done
+        
+        # Validate YAML files
+        echo "\nValidating YAML configuration files..."
+        
+        # Basic YAML validation (check for syntax errors)
+        YAML_FILES=(
+          "monitoring/synthetic/health-checks.yml"
+          "monitoring/alerts/alert-rules.yml"
+          "monitoring/logging/log-config.yml"
+        )
+        
+        for file in "${YAML_FILES[@]}"; do
+          if [ -f "$file" ]; then
+            # Check for basic YAML syntax issues
+            if python3 -c "import yaml; yaml.safe_load(open('$file'))" 2>/dev/null; then
+              echo "✅ $file is valid YAML"
+            else
+              echo "❌ $file contains invalid YAML"
+              exit 1
+            fi
+          fi
+        done
+
+    # Create monitoring setup report
+    - name: Generate Monitoring Setup Report
+      run: |
+        echo "# Monitoring Setup Report" > monitoring-setup-report.md
+        echo "Generated on: $(date)" >> monitoring-setup-report.md
+        echo "Monitoring Level: ${{ env.MONITORING_LEVEL }}" >> monitoring-setup-report.md
+        echo "Notification Channels: ${{ env.NOTIFICATION_CHANNELS }}" >> monitoring-setup-report.md
+        echo "" >> monitoring-setup-report.md
+        
+        echo "## Components Configured" >> monitoring-setup-report.md
+        echo "" >> monitoring-setup-report.md
+        echo "✅ Application Performance Monitoring (APM)" >> monitoring-setup-report.md
+        echo "✅ Real User Monitoring (RUM)" >> monitoring-setup-report.md
+        echo "✅ Synthetic Health Checks" >> monitoring-setup-report.md
+        echo "✅ Infrastructure Monitoring" >> monitoring-setup-report.md
+        echo "✅ Custom Metrics Collection" >> monitoring-setup-report.md
+        echo "✅ Alert Rules and Notifications" >> monitoring-setup-report.md
+        echo "✅ Monitoring Dashboards" >> monitoring-setup-report.md
+        echo "✅ Log Aggregation and Analysis" >> monitoring-setup-report.md
+        echo "" >> monitoring-setup-report.md
+        
+        echo "## Next Steps" >> monitoring-setup-report.md
+        echo "" >> monitoring-setup-report.md
+        echo "1. **Configure Secrets**: Ensure all required secrets are set in repository settings" >> monitoring-setup-report.md
+        echo "   - APPLICATIONINSIGHTS_CONNECTION_STRING" >> monitoring-setup-report.md
+        echo "   - SLACK_WEBHOOK_URL" >> monitoring-setup-report.md
+        echo "   - LOG_ANALYTICS_WORKSPACE_ID" >> monitoring-setup-report.md
+        echo "   - SMTP_* secrets for email notifications" >> monitoring-setup-report.md
+        echo "" >> monitoring-setup-report.md
+        echo "2. **Deploy Monitoring Code**: Integrate monitoring code into your application" >> monitoring-setup-report.md
+        echo "3. **Test Alerts**: Verify that alerts and notifications are working correctly" >> monitoring-setup-report.md
+        echo "4. **Create Dashboards**: Import dashboard configurations into your monitoring platform" >> monitoring-setup-report.md
+        echo "5. **Set Up Synthetic Tests**: Configure synthetic monitoring for critical user journeys" >> monitoring-setup-report.md
+        echo "" >> monitoring-setup-report.md
+        
+        echo "## Configuration Files" >> monitoring-setup-report.md
+        echo "" >> monitoring-setup-report.md
+        echo "All monitoring configuration files have been created in the \`monitoring/\` directory:" >> monitoring-setup-report.md
+        echo "" >> monitoring-setup-report.md
+        find monitoring -type f | sort | sed 's/^/- /' >> monitoring-setup-report.md
+
+    # Upload monitoring configurations and report
+    - name: Upload Monitoring Setup
+      uses: actions/upload-artifact@v4
+      with:
+        name: monitoring-setup-${{ github.run_id }}
+        path: |
+          monitoring/
+          monitoring-setup-report.md
+        retention-days: 90
+
+    # Notify about monitoring setup completion
+    - name: Notify Monitoring Setup Complete
+      run: |
+        chmod +x scripts/notify-teams.sh
+        ./scripts/notify-teams.sh "monitoring_setup" "production" "Monitoring and alerting setup completed successfully"
