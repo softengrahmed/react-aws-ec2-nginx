@@ -568,6 +568,348 @@ EOF
 }
 
 # ========================================================================================
+# SECURITY ALERT NOTIFICATION
+# ========================================================================================
+
+send_security_alert_notification() {
+    local webhook_url="$1"
+    local platform="$2"
+    local alert_type="$3"
+    local severity="$4"
+    local message="$5"
+    
+    info_msg "Sending security alert notification to $platform..."
+    
+    local status_color
+    local status_emoji
+    case "$severity" in
+        "critical")
+            status_color="FF0000"
+            status_emoji="🚨"
+            ;;
+        "high")
+            status_color="FF8000"
+            status_emoji="⚠️"
+            ;;
+        "medium")
+            status_color="FFFF00"
+            status_emoji="⚠️"
+            ;;
+        *)
+            status_color="808080"
+            status_emoji="ℹ️"
+            ;;
+    esac
+    
+    case "$platform" in
+        "teams")
+            cat << EOF > security-teams-payload.json
+{
+    "@type": "MessageCard",
+    "@context": "http://schema.org/extensions",
+    "themeColor": "$status_color",
+    "summary": "Security Alert: $status_emoji $alert_type",
+    "sections": [
+        {
+            "activityTitle": "$status_emoji Security Alert",
+            "activitySubtitle": "$alert_type - Severity: $severity",
+            "facts": [
+                {"name": "🔒 Alert Type", "value": "$alert_type"},
+                {"name": "⚡ Severity", "value": "$severity"},
+                {"name": "📝 Message", "value": "$message"},
+                {"name": "🌿 Branch", "value": "${GITHUB_REF_NAME:-'N/A'}"},
+                {"name": "💾 Commit", "value": "${GITHUB_SHA:0:8:-'N/A'}"},
+                {"name": "⏰ Detected At", "value": "$(date +'%Y-%m-%d %H:%M UTC')"}
+            ]
+        }
+    ],
+    "potentialAction": [
+        {
+            "@type": "OpenUri",
+            "name": "View Security Report",
+            "targets": [
+                {
+                    "os": "default",
+                    "uri": "${GITHUB_SERVER_URL:-'https://github.com'}/${GITHUB_REPOSITORY:-''}/security"
+                }
+            ]
+        }
+    ]
+}
+EOF
+            curl -H "Content-Type: application/json" -d @security-teams-payload.json "$webhook_url"
+            ;;
+        "slack")
+            local color
+            case "$severity" in
+                "critical"|"high") color="danger" ;;
+                "medium") color="warning" ;;
+                *) color="#808080" ;;
+            esac
+            
+            cat << EOF > security-slack-payload.json
+{
+    "text": "$status_emoji Security Alert: $alert_type",
+    "attachments": [
+        {
+            "color": "$color",
+            "title": "Security Vulnerability Detected",
+            "fields": [
+                {"title": "Alert Type", "value": "$alert_type", "short": true},
+                {"title": "Severity", "value": "$severity", "short": true},
+                {"title": "Branch", "value": "${GITHUB_REF_NAME:-'N/A'}", "short": true},
+                {"title": "Commit", "value": "${GITHUB_SHA:0:8:-'N/A'}", "short": true},
+                {"title": "Details", "value": "$message", "short": false}
+            ],
+            "footer": "Security Scanner",
+            "ts": $(date +%s)
+        }
+    ]
+}
+EOF
+            curl -X POST -H "Content-Type: application/json" -d @security-slack-payload.json "$webhook_url"
+            ;;
+    esac
+}
+
+# ========================================================================================
+# CLEANUP NOTIFICATION
+# ========================================================================================
+
+send_cleanup_notification() {
+    local webhook_url="$1"
+    local platform="$2"
+    local cleanup_type="$3"
+    local status="$4"
+    local details="$5"
+    
+    info_msg "Sending cleanup notification to $platform..."
+    
+    local status_color
+    local status_emoji
+    case "$status" in
+        "success")
+            status_color="00FF00"
+            status_emoji="🧹"
+            ;;
+        "warning")
+            status_color="FFFF00"
+            status_emoji="⚠️"
+            ;;
+        "failed")
+            status_color="FF0000"
+            status_emoji="❌"
+            ;;
+        *)
+            status_color="808080"
+            status_emoji="ℹ️"
+            ;;
+    esac
+    
+    case "$platform" in
+        "teams")
+            cat << EOF > cleanup-teams-payload.json
+{
+    "@type": "MessageCard",
+    "@context": "http://schema.org/extensions",
+    "themeColor": "$status_color",
+    "summary": "Cleanup: $status_emoji $cleanup_type",
+    "sections": [
+        {
+            "activityTitle": "$status_emoji Resource Cleanup",
+            "activitySubtitle": "$cleanup_type cleanup $status",
+            "facts": [
+                {"name": "🧹 Cleanup Type", "value": "$cleanup_type"},
+                {"name": "📊 Status", "value": "$status"},
+                {"name": "📝 Details", "value": "$details"},
+                {"name": "📦 Repository", "value": "${GITHUB_REPOSITORY:-'N/A'}"},
+                {"name": "⏰ Completed At", "value": "$(date +'%Y-%m-%d %H:%M UTC')"}
+            ]
+        }
+    ]
+}
+EOF
+            curl -H "Content-Type: application/json" -d @cleanup-teams-payload.json "$webhook_url"
+            ;;
+        "slack")
+            local color
+            case "$status" in
+                "success") color="good" ;;
+                "warning") color="warning" ;;
+                "failed") color="danger" ;;
+                *) color="#808080" ;;
+            esac
+            
+            cat << EOF > cleanup-slack-payload.json
+{
+    "text": "$status_emoji $cleanup_type cleanup $status",
+    "attachments": [
+        {
+            "color": "$color",
+            "title": "Resource Cleanup Report",
+            "fields": [
+                {"title": "Cleanup Type", "value": "$cleanup_type", "short": true},
+                {"title": "Status", "value": "$status", "short": true},
+                {"title": "Repository", "value": "${GITHUB_REPOSITORY:-'N/A'}", "short": true},
+                {"title": "Details", "value": "$details", "short": false}
+            ],
+            "footer": "Cleanup Service",
+            "ts": $(date +%s)
+        }
+    ]
+}
+EOF
+            curl -X POST -H "Content-Type: application/json" -d @cleanup-slack-payload.json "$webhook_url"
+            ;;
+    esac
+}
+
+# ========================================================================================
+# MONITORING SETUP NOTIFICATION
+# ========================================================================================
+
+send_monitoring_notification() {
+    local webhook_url="$1"
+    local platform="$2"
+    local setup_type="$3"
+    local status="$4"
+    local details="$5"
+    
+    info_msg "Sending monitoring setup notification to $platform..."
+    
+    local status_color
+    local status_emoji
+    case "$status" in
+        "success")
+            status_color="00FF00"
+            status_emoji="📊"
+            ;;
+        "warning")
+            status_color="FFFF00"
+            status_emoji="⚠️"
+            ;;
+        "failed")
+            status_color="FF0000"
+            status_emoji="❌"
+            ;;
+        *)
+            status_color="808080"
+            status_emoji="ℹ️"
+            ;;
+    esac
+    
+    case "$platform" in
+        "teams")
+            cat << EOF > monitoring-teams-payload.json
+{
+    "@type": "MessageCard",
+    "@context": "http://schema.org/extensions",
+    "themeColor": "$status_color",
+    "summary": "Monitoring: $status_emoji $setup_type",
+    "sections": [
+        {
+            "activityTitle": "$status_emoji Monitoring Setup",
+            "activitySubtitle": "$setup_type setup $status",
+            "facts": [
+                {"name": "📊 Setup Type", "value": "$setup_type"},
+                {"name": "📈 Status", "value": "$status"},
+                {"name": "📝 Details", "value": "$details"},
+                {"name": "📦 Repository", "value": "${GITHUB_REPOSITORY:-'N/A'}"},
+                {"name": "⏰ Setup At", "value": "$(date +'%Y-%m-%d %H:%M UTC')"}
+            ]
+        }
+    ]
+}
+EOF
+            curl -H "Content-Type: application/json" -d @monitoring-teams-payload.json "$webhook_url"
+            ;;
+        "slack")
+            local color
+            case "$status" in
+                "success") color="good" ;;
+                "warning") color="warning" ;;
+                "failed") color="danger" ;;
+                *) color="#808080" ;;
+            esac
+            
+            cat << EOF > monitoring-slack-payload.json
+{
+    "text": "$status_emoji $setup_type monitoring setup $status",
+    "attachments": [
+        {
+            "color": "$color",
+            "title": "Monitoring Setup Report",
+            "fields": [
+                {"title": "Setup Type", "value": "$setup_type", "short": true},
+                {"title": "Status", "value": "$status", "short": true},
+                {"title": "Repository", "value": "${GITHUB_REPOSITORY:-'N/A'}", "short": true},
+                {"title": "Details", "value": "$details", "short": false}
+            ],
+            "footer": "Monitoring Service",
+            "ts": $(date +%s)
+        }
+    ]
+}
+EOF
+            curl -X POST -H "Content-Type: application/json" -d @monitoring-slack-payload.json "$webhook_url"
+            ;;
+    esac
+}
+
+# ========================================================================================
+# SIMPLE NOTIFICATION WRAPPER
+# ========================================================================================
+
+send_simple_notification() {
+    local notification_type="$1"
+    local environment="$2"
+    local message="$3"
+    
+    info_msg "Sending simple notification: $notification_type"
+    
+    # Use default webhook URL from environment
+    local webhook_url="${TEAMS_WEBHOOK_URL:-${SLACK_WEBHOOK_URL:-}}"
+    local platform="teams"  # Default to teams
+    
+    if [[ "$webhook_url" == *"slack"* ]]; then
+        platform="slack"
+    fi
+    
+    if [[ -z "$webhook_url" ]]; then
+        warning_msg "No webhook URL configured, skipping notification"
+        return 0
+    fi
+    
+    case "$notification_type" in
+        "success")
+            send_teams_notification "$webhook_url" "success" "Completed" "N/A" "N/A" "Passed" "$message"
+            ;;
+        "failure")
+            send_teams_notification "$webhook_url" "failure" "Failed" "N/A" "N/A" "Failed" "$message"
+            ;;
+        "security_alert")
+            send_security_alert_notification "$webhook_url" "$platform" "Security Scan" "high" "$message"
+            ;;
+        "quality_alert")
+            send_quality_metrics_notification "$webhook_url" "$platform" "C" "N/A" "N/A" "N/A"
+            ;;
+        "cleanup_success")
+            send_cleanup_notification "$webhook_url" "$platform" "$environment" "success" "$message"
+            ;;
+        "cleanup_warning")
+            send_cleanup_notification "$webhook_url" "$platform" "$environment" "warning" "$message"
+            ;;
+        "monitoring_setup")
+            send_monitoring_notification "$webhook_url" "$platform" "$environment" "success" "$message"
+            ;;
+        *)
+            warning_msg "Unknown simple notification type: $notification_type, sending as generic message"
+            send_teams_notification "$webhook_url" "info" "$notification_type" "N/A" "N/A" "N/A" "$message"
+            ;;
+    esac
+}
+
+# ========================================================================================
 # MAIN NOTIFICATION DISPATCHER
 # ========================================================================================
 
@@ -615,8 +957,34 @@ main() {
             local webhook_url="${TEAMS_WEBHOOK_URL:-${SLACK_WEBHOOK_URL:-}}"
             send_deployment_notification "$webhook_url" "$platform" "${ENVIRONMENT:-'production'}" "${DEPLOYMENT_STATUS:-'unknown'}" "${DEPLOYMENT_URL:-'N/A'}" "${HEALTH_STATUS:-'unknown'}"
             ;;
+        "security_alert")
+            # Security alert notification
+            local webhook_url="${TEAMS_WEBHOOK_URL:-${SLACK_WEBHOOK_URL:-}}"
+            send_security_alert_notification "$webhook_url" "$platform" "${ALERT_TYPE:-'Security Scan'}" "${SEVERITY:-'high'}" "${3:-'Security vulnerabilities detected'}"
+            ;;
+        "quality_alert")
+            # Quality alert notification (using quality metrics with alert styling)
+            local webhook_url="${TEAMS_WEBHOOK_URL:-${SLACK_WEBHOOK_URL:-}}"
+            send_quality_metrics_notification "$webhook_url" "$platform" "${QUALITY_GRADE:-'C'}" "${TEST_COVERAGE:-'N/A'}" "${COMPLEXITY_SCORE:-'N/A'}" "${DUPLICATION_SCORE:-'N/A'}"
+            ;;
+        "cleanup_success"|"cleanup_warning")
+            # Cleanup notification
+            local webhook_url="${TEAMS_WEBHOOK_URL:-${SLACK_WEBHOOK_URL:-}}"
+            local status="${notification_type#cleanup_}"
+            send_cleanup_notification "$webhook_url" "$platform" "${platform:-'repository'}" "$status" "${3:-'Cleanup operation completed'}"
+            ;;
+        "monitoring_setup")
+            # Monitoring setup notification
+            local webhook_url="${TEAMS_WEBHOOK_URL:-${SLACK_WEBHOOK_URL:-}}"
+            send_monitoring_notification "$webhook_url" "$platform" "${platform:-'application'}" "success" "${3:-'Monitoring setup completed successfully'}"
+            ;;
+        # Handle simple notification calls with 3 parameters
+        "success"|"failure")
+            send_simple_notification "$notification_type" "$platform" "${3:-'Operation completed'}"
+            ;;
         *)
-            error_exit "Unknown notification type: $notification_type"
+            # For any unrecognized notification type, try simple notification
+            send_simple_notification "$notification_type" "$platform" "${3:-'Unknown notification'}"
             ;;
     esac
     
