@@ -1,0 +1,504 @@
+name: Resource Cleanup and Management
+
+on:
+  schedule:
+    # Run cleanup daily at 3 AM UTC
+    - cron: '0 3 * * *'
+    # Run weekly deep cleanup on Sundays at 2 AM UTC
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+    inputs:
+      cleanup_type:
+        description: 'Type of cleanup to perform'
+        required: true
+        default: 'standard'
+        type: choice
+        options:
+        - standard
+        - deep
+        - artifacts
+        - branches
+        - packages
+        - all
+      retention_days:
+        description: 'Retention period in days'
+        required: false
+        default: '30'
+        type: string
+      dry_run:
+        description: 'Perform dry run without actual deletion'
+        required: false
+        default: true
+        type: boolean
+
+env:
+  RETENTION_DAYS: ${{ github.event.inputs.retention_days || '30' }}
+  DRY_RUN: ${{ github.event.inputs.dry_run || 'true' }}
+  CLEANUP_TYPE: ${{ github.event.inputs.cleanup_type || 'standard' }}
+
+jobs:
+  artifacts_cleanup:
+    if: contains(github.event.inputs.cleanup_type, 'artifacts') || github.event.inputs.cleanup_type == 'all' || github.event.inputs.cleanup_type == 'standard' || github.event.inputs.cleanup_type == ''
+    runs-on: ubuntu-latest
+    name: Cleanup Build Artifacts
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # Clean up old artifacts
+    - name: Delete Old Artifacts
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const retentionDays = parseInt('${{ env.RETENTION_DAYS }}');
+          const dryRun = '${{ env.DRY_RUN }}' === 'true';
+          const cutoffDate = new Date();
+          cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
+          
+          console.log(`Cleaning up artifacts older than ${retentionDays} days (before ${cutoffDate.toISOString()})`);
+          console.log(`Dry run mode: ${dryRun}`);
+          
+          let totalSize = 0;
+          let deletedCount = 0;
+          
+          try {
+            const artifacts = await github.rest.actions.listArtifactsForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100
+            });
+            
+            console.log(`Found ${artifacts.data.artifacts.length} artifacts`);
+            
+            for (const artifact of artifacts.data.artifacts) {
+              const createdAt = new Date(artifact.created_at);
+              const sizeInMB = (artifact.size_in_bytes / (1024 * 1024)).toFixed(2);
+              
+              if (createdAt < cutoffDate) {
+                console.log(`${dryRun ? '[DRY RUN] Would delete' : 'Deleting'} artifact: ${artifact.name} (${sizeInMB} MB, created: ${createdAt.toISOString()})`);
+                
+                if (!dryRun) {
+                  try {
+                    await github.rest.actions.deleteArtifact({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      artifact_id: artifact.id
+                    });
+                    deletedCount++;
+                    totalSize += artifact.size_in_bytes;
+                  } catch (error) {
+                    console.error(`Failed to delete artifact ${artifact.name}: ${error.message}`);
+                  }
+                } else {
+                  deletedCount++;
+                  totalSize += artifact.size_in_bytes;
+                }
+              } else {
+                console.log(`Keeping artifact: ${artifact.name} (${sizeInMB} MB, created: ${createdAt.toISOString()})`);
+              }
+            }
+            
+            const totalSizeMB = (totalSize / (1024 * 1024)).toFixed(2);
+            console.log(`${dryRun ? 'Would free' : 'Freed'} ${totalSizeMB} MB by ${dryRun ? 'marking for deletion' : 'deleting'} ${deletedCount} artifacts`);
+            
+          } catch (error) {
+            console.error('Error during artifact cleanup:', error.message);
+            throw error;
+          }
+
+  branch_cleanup:
+    if: contains(github.event.inputs.cleanup_type, 'branches') || github.event.inputs.cleanup_type == 'all' || github.event.inputs.cleanup_type == 'deep'
+    runs-on: ubuntu-latest
+    name: Cleanup Stale Branches
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Clean Up Stale Branches
+      run: |
+        echo "Analyzing branches for cleanup..."
+        RETENTION_DAYS=${{ env.RETENTION_DAYS }}
+        DRY_RUN=${{ env.DRY_RUN }}
+        CUTOFF_DATE=$(date -d "$RETENTION_DAYS days ago" +%s)
+        
+        echo "Cutoff date: $(date -d "@$CUTOFF_DATE")" 
+        echo "Dry run mode: $DRY_RUN"
+        
+        # Protected branches that should never be deleted
+        PROTECTED_BRANCHES=("main" "master" "develop" "staging" "production")
+        
+        # Get all remote branches
+        git fetch --all --prune
+        
+        echo "\nAnalyzing remote branches:"
+        for branch in $(git branch -r --format='%(refname:short)' | grep -v 'HEAD' | sed 's/origin\///'); do
+          # Skip protected branches
+          if [[ " ${PROTECTED_BRANCHES[@]} " =~ " ${branch} " ]]; then
+            echo "⛔ Skipping protected branch: $branch"
+            continue
+          fi
+          
+          # Get last commit date
+          LAST_COMMIT=$(git log -1 --format="%ct" "origin/$branch" 2>/dev/null || echo "0")
+          
+          if [ "$LAST_COMMIT" -lt "$CUTOFF_DATE" ] && [ "$LAST_COMMIT" -gt "0" ]; then
+            LAST_COMMIT_DATE=$(date -d "@$LAST_COMMIT")
+            echo "🗑️  Stale branch found: $branch (last commit: $LAST_COMMIT_DATE)"
+            
+            # Check if branch has unmerged commits
+            UNMERGED=$(git cherry origin/main "origin/$branch" 2>/dev/null | wc -l)
+            
+            if [ "$UNMERGED" -gt 0 ]; then
+              echo "⚠️  Branch $branch has $UNMERGED unmerged commits - marking for review"
+              continue
+            fi
+            
+            if [ "$DRY_RUN" == "true" ]; then
+              echo "[DRY RUN] Would delete branch: $branch"
+            else
+              echo "Deleting branch: $branch"
+              git push origin --delete "$branch" || echo "Failed to delete $branch"
+            fi
+          else
+            LAST_COMMIT_DATE=$(date -d "@$LAST_COMMIT" 2>/dev/null || echo "unknown")
+            echo "✅ Keeping active branch: $branch (last commit: $LAST_COMMIT_DATE)"
+          fi
+        done
+
+  package_cleanup:
+    if: contains(github.event.inputs.cleanup_type, 'packages') || github.event.inputs.cleanup_type == 'all' || github.event.inputs.cleanup_type == 'deep'
+    runs-on: ubuntu-latest
+    name: Cleanup Package Versions
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Clean Up Package Versions
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const retentionDays = parseInt('${{ env.RETENTION_DAYS }}');
+          const dryRun = '${{ env.DRY_RUN }}' === 'true';
+          const cutoffDate = new Date();
+          cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
+          
+          console.log(`Cleaning up package versions older than ${retentionDays} days`);
+          console.log(`Dry run mode: ${dryRun}`);
+          
+          try {
+            // Get packages for the repository
+            const packages = await github.rest.packages.getAllPackageVersionsForPackageOwnedByOrg({
+              package_type: 'container',
+              package_name: context.repo.repo,
+              org: context.repo.owner,
+              per_page: 100
+            }).catch(() => {
+              // Try user packages if org fails
+              return github.rest.packages.getAllPackageVersionsForPackageOwnedByUser({
+                package_type: 'container', 
+                package_name: context.repo.repo,
+                username: context.repo.owner,
+                per_page: 100
+              });
+            }).catch(() => {
+              console.log('No packages found or access denied');
+              return { data: [] };
+            });
+            
+            if (packages.data.length === 0) {
+              console.log('No package versions found to clean up');
+              return;
+            }
+            
+            console.log(`Found ${packages.data.length} package versions`);
+            
+            let deletedCount = 0;
+            
+            for (const version of packages.data) {
+              const createdAt = new Date(version.created_at);
+              
+              // Keep latest versions and tagged releases
+              if (version.metadata && version.metadata.container && version.metadata.container.tags.length > 0) {
+                console.log(`Keeping tagged version: ${version.name} (tags: ${version.metadata.container.tags.join(', ')})`);
+                continue;
+              }
+              
+              if (createdAt < cutoffDate) {
+                console.log(`${dryRun ? '[DRY RUN] Would delete' : 'Deleting'} package version: ${version.name} (created: ${createdAt.toISOString()})`);
+                
+                if (!dryRun) {
+                  try {
+                    await github.rest.packages.deletePackageVersionForOrg({
+                      package_type: 'container',
+                      package_name: context.repo.repo,
+                      org: context.repo.owner,
+                      package_version_id: version.id
+                    }).catch(() => {
+                      // Try user deletion if org fails
+                      return github.rest.packages.deletePackageVersionForUser({
+                        package_type: 'container',
+                        package_name: context.repo.repo,
+                        username: context.repo.owner,
+                        package_version_id: version.id
+                      });
+                    });
+                    deletedCount++;
+                  } catch (error) {
+                    console.error(`Failed to delete package version ${version.name}: ${error.message}`);
+                  }
+                } else {
+                  deletedCount++;
+                }
+              } else {
+                console.log(`Keeping recent version: ${version.name} (created: ${createdAt.toISOString()})`);
+              }
+            }
+            
+            console.log(`${dryRun ? 'Would delete' : 'Deleted'} ${deletedCount} package versions`);
+            
+          } catch (error) {
+            console.error('Error during package cleanup:', error.message);
+            // Don't fail the job for package cleanup errors
+            console.log('Continuing despite package cleanup errors...');
+          }
+
+  workflow_runs_cleanup:
+    if: contains(github.event.inputs.cleanup_type, 'all') || github.event.inputs.cleanup_type == 'deep'
+    runs-on: ubuntu-latest
+    name: Cleanup Workflow Runs
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Clean Up Old Workflow Runs
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const retentionDays = parseInt('${{ env.RETENTION_DAYS }}');
+          const dryRun = '${{ env.DRY_RUN }}' === 'true';
+          const cutoffDate = new Date();
+          cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
+          
+          console.log(`Cleaning up workflow runs older than ${retentionDays} days`);
+          console.log(`Dry run mode: ${dryRun}`);
+          
+          try {
+            let page = 1;
+            let deletedCount = 0;
+            
+            while (true) {
+              const runs = await github.rest.actions.listWorkflowRunsForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                per_page: 100,
+                page: page,
+                status: 'completed'
+              });
+              
+              if (runs.data.workflow_runs.length === 0) {
+                break;
+              }
+              
+              for (const run of runs.data.workflow_runs) {
+                const createdAt = new Date(run.created_at);
+                
+                if (createdAt < cutoffDate) {
+                  console.log(`${dryRun ? '[DRY RUN] Would delete' : 'Deleting'} workflow run: ${run.id} (${run.name}, created: ${createdAt.toISOString()})`);
+                  
+                  if (!dryRun) {
+                    try {
+                      await github.rest.actions.deleteWorkflowRun({
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                        run_id: run.id
+                      });
+                      deletedCount++;
+                    } catch (error) {
+                      console.error(`Failed to delete workflow run ${run.id}: ${error.message}`);
+                    }
+                  } else {
+                    deletedCount++;
+                  }
+                } else {
+                  console.log(`Keeping recent run: ${run.id} (${run.name}, created: ${createdAt.toISOString()})`);
+                }
+              }
+              
+              page++;
+              
+              // Safety limit to prevent infinite loops
+              if (page > 10) {
+                console.log('Reached page limit, stopping workflow run cleanup');
+                break;
+              }
+            }
+            
+            console.log(`${dryRun ? 'Would delete' : 'Deleted'} ${deletedCount} workflow runs`);
+            
+          } catch (error) {
+            console.error('Error during workflow runs cleanup:', error.message);
+            throw error;
+          }
+
+  cache_cleanup:
+    runs-on: ubuntu-latest
+    name: Cleanup Repository Caches
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Clean Up Repository Caches
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const retentionDays = parseInt('${{ env.RETENTION_DAYS }}');
+          const dryRun = '${{ env.DRY_RUN }}' === 'true';
+          const cutoffDate = new Date();
+          cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
+          
+          console.log(`Cleaning up caches older than ${retentionDays} days`);
+          console.log(`Dry run mode: ${dryRun}`);
+          
+          try {
+            const caches = await github.rest.actions.getActionsCacheList({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100
+            });
+            
+            console.log(`Found ${caches.data.actions_caches.length} caches`);
+            
+            let deletedCount = 0;
+            let totalSize = 0;
+            
+            for (const cache of caches.data.actions_caches) {
+              const createdAt = new Date(cache.created_at);
+              const lastAccessedAt = new Date(cache.last_accessed_at);
+              const sizeInMB = (cache.size_in_bytes / (1024 * 1024)).toFixed(2);
+              
+              // Delete if either created or last accessed is old
+              const shouldDelete = createdAt < cutoffDate || lastAccessedAt < cutoffDate;
+              
+              if (shouldDelete) {
+                console.log(`${dryRun ? '[DRY RUN] Would delete' : 'Deleting'} cache: ${cache.key} (${sizeInMB} MB, created: ${createdAt.toISOString()}, last accessed: ${lastAccessedAt.toISOString()})`);
+                
+                if (!dryRun) {
+                  try {
+                    await github.rest.actions.deleteActionsCacheById({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      cache_id: cache.id
+                    });
+                    deletedCount++;
+                    totalSize += cache.size_in_bytes;
+                  } catch (error) {
+                    console.error(`Failed to delete cache ${cache.key}: ${error.message}`);
+                  }
+                } else {
+                  deletedCount++;
+                  totalSize += cache.size_in_bytes;
+                }
+              } else {
+                console.log(`Keeping cache: ${cache.key} (${sizeInMB} MB, created: ${createdAt.toISOString()}, last accessed: ${lastAccessedAt.toISOString()})`);
+              }
+            }
+            
+            const totalSizeMB = (totalSize / (1024 * 1024)).toFixed(2);
+            console.log(`${dryRun ? 'Would free' : 'Freed'} ${totalSizeMB} MB by ${dryRun ? 'marking for deletion' : 'deleting'} ${deletedCount} caches`);
+            
+          } catch (error) {
+            console.error('Error during cache cleanup:', error.message);
+            console.log('Continuing despite cache cleanup errors...');
+          }
+
+  cleanup_summary:
+    needs: [artifacts_cleanup, branch_cleanup, package_cleanup, workflow_runs_cleanup, cache_cleanup]
+    if: always()
+    runs-on: ubuntu-latest
+    name: Cleanup Summary Report
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Generate Cleanup Report
+      run: |
+        echo "# Resource Cleanup Report" > cleanup-report.md
+        echo "Generated on: $(date)" >> cleanup-report.md
+        echo "Cleanup Type: ${{ env.CLEANUP_TYPE }}" >> cleanup-report.md
+        echo "Retention Period: ${{ env.RETENTION_DAYS }} days" >> cleanup-report.md
+        echo "Dry Run Mode: ${{ env.DRY_RUN }}" >> cleanup-report.md
+        echo "" >> cleanup-report.md
+        
+        echo "## Cleanup Results" >> cleanup-report.md
+        echo "" >> cleanup-report.md
+        
+        # Check each cleanup job
+        declare -A jobs
+        jobs["Artifacts Cleanup"]="${{ needs.artifacts_cleanup.result }}"
+        jobs["Branch Cleanup"]="${{ needs.branch_cleanup.result }}"
+        jobs["Package Cleanup"]="${{ needs.package_cleanup.result }}"
+        jobs["Workflow Runs Cleanup"]="${{ needs.workflow_runs_cleanup.result }}"
+        jobs["Cache Cleanup"]="${{ needs.cache_cleanup.result }}"
+        
+        for job in "${!jobs[@]}"; do
+          result="${jobs[$job]}"
+          if [ "$result" == "success" ]; then
+            echo "✅ $job: COMPLETED" >> cleanup-report.md
+          elif [ "$result" == "failure" ]; then
+            echo "❌ $job: FAILED" >> cleanup-report.md
+          elif [ "$result" == "skipped" ]; then
+            echo "⏭️ $job: SKIPPED" >> cleanup-report.md
+          else
+            echo "⚠️ $job: $result" >> cleanup-report.md
+          fi
+        done
+        
+        echo "" >> cleanup-report.md
+        echo "## Summary" >> cleanup-report.md
+        echo "" >> cleanup-report.md
+        
+        if [ "${{ env.DRY_RUN }}" == "true" ]; then
+          echo "- This was a dry run - no resources were actually deleted" >> cleanup-report.md
+          echo "- Review the logs to see what would be cleaned up" >> cleanup-report.md
+          echo "- Run with dry_run: false to perform actual cleanup" >> cleanup-report.md
+        else
+          echo "- Resources older than ${{ env.RETENTION_DAYS }} days were cleaned up" >> cleanup-report.md
+          echo "- Check individual job logs for detailed cleanup statistics" >> cleanup-report.md
+        fi
+        
+        echo "" >> cleanup-report.md
+        echo "## Recommendations" >> cleanup-report.md
+        echo "" >> cleanup-report.md
+        echo "- Run cleanup regularly to maintain repository health" >> cleanup-report.md
+        echo "- Monitor storage usage and adjust retention periods as needed" >> cleanup-report.md
+        echo "- Consider automating cleanup with scheduled workflows" >> cleanup-report.md
+        echo "- Keep important artifacts and branches protected" >> cleanup-report.md
+        echo "- Review cleanup logs to ensure nothing important was deleted" >> cleanup-report.md
+
+    - name: Upload Cleanup Report
+      uses: actions/upload-artifact@v4
+      with:
+        name: cleanup-report-${{ github.run_id }}
+        path: cleanup-report.md
+        retention-days: 90
+
+    # Notify teams about cleanup results
+    - name: Notify Cleanup Results
+      run: |
+        chmod +x scripts/notify-teams.sh
+        
+        FAILED_JOBS=$(echo '${{ toJSON(needs) }}' | jq -r 'to_entries[] | select(.value.result == "failure") | .key' | wc -l)
+        
+        if [ $FAILED_JOBS -gt 0 ]; then
+          ./scripts/notify-teams.sh "cleanup_warning" "repository" "Resource cleanup completed with $FAILED_JOBS failed jobs"
+        else
+          ./scripts/notify-teams.sh "cleanup_success" "repository" "Resource cleanup completed successfully"
+        fi

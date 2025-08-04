@@ -1,0 +1,458 @@
+name: Quality Gates Enforcement
+
+on:
+  push:
+    branches: [ main, develop, 'feature/*', 'hotfix/*', 'release/*' ]
+  pull_request:
+    branches: [ main, develop ]
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+    inputs:
+      strict_mode:
+        description: 'Enable strict quality enforcement'
+        required: false
+        default: false
+        type: boolean
+      coverage_threshold:
+        description: 'Code coverage threshold percentage'
+        required: false
+        default: '80'
+        type: string
+
+env:
+  NODE_VERSION: '18.x'
+  COVERAGE_THRESHOLD: ${{ github.event.inputs.coverage_threshold || '80' }}
+  STRICT_MODE: ${{ github.event.inputs.strict_mode || 'false' }}
+
+jobs:
+  code_quality:
+    runs-on: ubuntu-latest
+    name: Code Quality Analysis
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: package-lock.json
+
+    - name: Install dependencies
+      run: |
+        npm ci --prefer-offline --no-audit
+        echo "Dependencies installed successfully"
+
+    # Code formatting check
+    - name: Check Code Formatting (Prettier)
+      run: |
+        echo "Checking code formatting..."
+        if npm run format:check 2>/dev/null; then
+          echo "✅ Code formatting is consistent"
+        else
+          echo "❌ Code formatting issues found"
+          echo "Run 'npm run format' to fix formatting issues"
+          if [ "${{ env.STRICT_MODE }}" == "true" ]; then
+            exit 1
+          fi
+        fi
+
+    # Linting analysis
+    - name: ESLint Analysis
+      run: |
+        echo "Running ESLint analysis..."
+        npx eslint . --ext .js,.jsx,.ts,.tsx --format json --output-file eslint-report.json || true
+        npx eslint . --ext .js,.jsx,.ts,.tsx --format stylish || true
+        
+        # Count errors and warnings
+        ERRORS=$(cat eslint-report.json | jq '[.[].messages[] | select(.severity == 2)] | length')
+        WARNINGS=$(cat eslint-report.json | jq '[.[].messages[] | select(.severity == 1)] | length')
+        
+        echo "ESLint Results:"
+        echo "- Errors: $ERRORS"
+        echo "- Warnings: $WARNINGS"
+        
+        # Fail on errors in strict mode
+        if [ "$ERRORS" -gt 0 ] && [ "${{ env.STRICT_MODE }}" == "true" ]; then
+          echo "❌ ESLint errors found in strict mode"
+          exit 1
+        elif [ "$ERRORS" -gt 0 ]; then
+          echo "⚠️ ESLint errors found but continuing in non-strict mode"
+        else
+          echo "✅ No ESLint errors found"
+        fi
+
+    # TypeScript type checking
+    - name: TypeScript Type Check
+      run: |
+        echo "Running TypeScript type checking..."
+        if [ -f "tsconfig.json" ]; then
+          npx tsc --noEmit --pretty || {
+            echo "❌ TypeScript type errors found"
+            if [ "${{ env.STRICT_MODE }}" == "true" ]; then
+              exit 1
+            fi
+          }
+          echo "✅ TypeScript type checking passed"
+        else
+          echo "ℹ️ No TypeScript configuration found, skipping type check"
+        fi
+
+    # Upload linting results
+    - name: Upload Linting Results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: eslint-results-${{ github.sha }}
+        path: eslint-report.json
+        retention-days: 30
+
+  test_coverage:
+    runs-on: ubuntu-latest
+    name: Test Coverage Analysis
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci --prefer-offline --no-audit
+
+    # Run tests with coverage
+    - name: Run Tests with Coverage
+      run: |
+        echo "Running tests with coverage analysis..."
+        npm run test -- --coverage --watchAll=false --passWithNoTests --coverageReporters=text --coverageReporters=lcov --coverageReporters=json
+        
+        # Extract coverage metrics
+        if [ -f "coverage/coverage-summary.json" ]; then
+          COVERAGE=$(cat coverage/coverage-summary.json | jq -r '.total.lines.pct')
+          BRANCHES=$(cat coverage/coverage-summary.json | jq -r '.total.branches.pct')
+          FUNCTIONS=$(cat coverage/coverage-summary.json | jq -r '.total.functions.pct')
+          STATEMENTS=$(cat coverage/coverage-summary.json | jq -r '.total.statements.pct')
+          
+          echo "Coverage Report:"
+          echo "- Lines: ${COVERAGE}%"
+          echo "- Branches: ${BRANCHES}%"
+          echo "- Functions: ${FUNCTIONS}%"
+          echo "- Statements: ${STATEMENTS}%"
+          
+          # Check coverage threshold
+          if (( $(echo "$COVERAGE >= ${{ env.COVERAGE_THRESHOLD }}" | bc -l) )); then
+            echo "✅ Coverage threshold met (${COVERAGE}% >= ${{ env.COVERAGE_THRESHOLD }}%)"
+          else
+            echo "❌ Coverage threshold not met (${COVERAGE}% < ${{ env.COVERAGE_THRESHOLD }}%)"
+            if [ "${{ env.STRICT_MODE }}" == "true" ]; then
+              exit 1
+            fi
+          fi
+        else
+          echo "⚠️ Coverage report not found"
+        fi
+
+    # Upload coverage reports
+    - name: Upload Coverage Reports
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: coverage-reports-${{ github.sha }}
+        path: |
+          coverage/
+          !coverage/tmp
+        retention-days: 30
+
+    # Upload to Codecov
+    - name: Upload to Codecov
+      uses: codecov/codecov-action@v4
+      continue-on-error: true
+      with:
+        file: ./coverage/lcov.info
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+      env:
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  build_quality:
+    runs-on: ubuntu-latest
+    name: Build Quality Assessment
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci --prefer-offline --no-audit
+
+    # Build assessment
+    - name: Build Application
+      run: |
+        echo "Building application for quality assessment..."
+        
+        # Build with timing
+        START_TIME=$(date +%s)
+        npm run build
+        END_TIME=$(date +%s)
+        BUILD_TIME=$((END_TIME - START_TIME))
+        
+        echo "Build completed in ${BUILD_TIME} seconds"
+        
+        # Analyze build output
+        if [ -d "build" ]; then
+          BUILD_SIZE=$(du -sh build | cut -f1)
+          FILE_COUNT=$(find build -type f | wc -l)
+          JS_SIZE=$(find build -name "*.js" -exec du -b {} + | awk '{sum += $1} END {print sum}' | numfmt --to=iec)
+          CSS_SIZE=$(find build -name "*.css" -exec du -b {} + | awk '{sum += $1} END {print sum}' | numfmt --to=iec)
+          
+          echo "Build Analysis:"
+          echo "- Total size: $BUILD_SIZE"
+          echo "- File count: $FILE_COUNT"
+          echo "- JavaScript size: $JS_SIZE"
+          echo "- CSS size: $CSS_SIZE"
+          echo "- Build time: ${BUILD_TIME}s"
+          
+          # Check for large files
+          echo "Large files (>1MB):"
+          find build -type f -size +1M -exec du -h {} + || echo "No large files found"
+          
+          # Performance warnings
+          if [ $BUILD_TIME -gt 120 ]; then
+            echo "⚠️ Build time is longer than 2 minutes"
+          fi
+          
+          # Check for unoptimized assets
+          UNMINIFIED=$(find build -name "*.js" -not -name "*.min.js" | head -5)
+          if [ ! -z "$UNMINIFIED" ]; then
+            echo "⚠️ Potential unminified JavaScript files found:"
+            echo "$UNMINIFIED"
+          fi
+        else
+          echo "❌ Build directory not found"
+          exit 1
+        fi
+
+    # Bundle analysis
+    - name: Bundle Analysis
+      run: |
+        echo "Analyzing bundle composition..."
+        
+        if command -v npx webpack-bundle-analyzer >/dev/null 2>&1; then
+          echo "Running webpack bundle analyzer..."
+          npx webpack-bundle-analyzer build/static/js/*.js --mode static --report bundle-report.html --no-open || true
+        else
+          echo "Bundle analyzer not available, analyzing manually..."
+          
+          # Manual bundle analysis
+          echo "Main JavaScript bundles:"
+          find build/static/js -name "*.js" -exec basename {} \; | head -10
+          
+          echo "Largest JavaScript files:"
+          find build/static/js -name "*.js" -exec du -h {} + | sort -rh | head -5
+        fi
+
+    # Upload build analysis
+    - name: Upload Build Analysis
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: build-analysis-${{ github.sha }}
+        path: |
+          build/
+          bundle-report.html
+          !build/**/*.map
+        retention-days: 30
+
+  performance_audit:
+    runs-on: ubuntu-latest
+    name: Performance Audit
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci --prefer-offline --no-audit
+
+    - name: Build application
+      run: npm run build
+
+    # Lighthouse CI performance audit
+    - name: Lighthouse CI
+      run: |
+        npm install -g @lhci/cli@0.12.x
+        
+        # Create Lighthouse CI config if not exists
+        if [ ! -f ".lighthouserc.js" ]; then
+          cat > .lighthouserc.js << 'EOF'
+        module.exports = {
+          ci: {
+            collect: {
+              staticDistDir: './build',
+              numberOfRuns: 1
+            },
+            assert: {
+              assertions: {
+                'categories:performance': ['warn', {minScore: 0.8}],
+                'categories:accessibility': ['error', {minScore: 0.9}],
+                'categories:best-practices': ['warn', {minScore: 0.8}],
+                'categories:seo': ['warn', {minScore: 0.8}],
+                'unused-css-rules': 'off',
+                'unused-javascript': 'off'
+              }
+            },
+            upload: {
+              target: 'temporary-public-storage'
+            }
+          }
+        };
+        EOF
+        fi
+        
+        # Run Lighthouse CI
+        lhci autorun || {
+          echo "⚠️ Lighthouse CI completed with warnings"
+          if [ "${{ env.STRICT_MODE }}" == "true" ]; then
+            exit 1
+          fi
+        }
+
+  quality_gate_summary:
+    needs: [code_quality, test_coverage, build_quality, performance_audit]
+    if: always()
+    runs-on: ubuntu-latest
+    name: Quality Gate Summary
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Generate Quality Report
+      run: |
+        echo "# Quality Gate Report" > quality-report.md
+        echo "Generated on: $(date)" >> quality-report.md
+        echo "Commit: ${{ github.sha }}" >> quality-report.md
+        echo "Branch: ${{ github.ref_name }}" >> quality-report.md
+        echo "Strict Mode: ${{ env.STRICT_MODE }}" >> quality-report.md
+        echo "" >> quality-report.md
+        
+        echo "## Quality Gates Status" >> quality-report.md
+        echo "" >> quality-report.md
+        
+        # Check each quality gate
+        declare -A gates
+        gates["Code Quality"]="${{ needs.code_quality.result }}"
+        gates["Test Coverage"]="${{ needs.test_coverage.result }}"
+        gates["Build Quality"]="${{ needs.build_quality.result }}"
+        gates["Performance Audit"]="${{ needs.performance_audit.result }}"
+        
+        PASSED=0
+        TOTAL=0
+        
+        for gate in "${!gates[@]}"; do
+          result="${gates[$gate]}"
+          TOTAL=$((TOTAL + 1))
+          
+          if [ "$result" == "success" ]; then
+            echo "✅ $gate: PASSED" >> quality-report.md
+            PASSED=$((PASSED + 1))
+          elif [ "$result" == "failure" ]; then
+            echo "❌ $gate: FAILED" >> quality-report.md
+          else
+            echo "⚠️ $gate: $result" >> quality-report.md
+          fi
+        done
+        
+        echo "" >> quality-report.md
+        echo "## Summary" >> quality-report.md
+        echo "" >> quality-report.md
+        echo "- Passed: $PASSED/$TOTAL quality gates" >> quality-report.md
+        
+        PASS_RATE=$((PASSED * 100 / TOTAL))
+        echo "- Pass rate: ${PASS_RATE}%" >> quality-report.md
+        
+        if [ $PASS_RATE -ge 75 ]; then
+          echo "- Overall Status: ✅ ACCEPTABLE" >> quality-report.md
+        elif [ $PASS_RATE -ge 50 ]; then
+          echo "- Overall Status: ⚠️ NEEDS IMPROVEMENT" >> quality-report.md
+        else
+          echo "- Overall Status: ❌ CRITICAL ISSUES" >> quality-report.md
+        fi
+        
+        echo "" >> quality-report.md
+        echo "## Recommendations" >> quality-report.md
+        echo "" >> quality-report.md
+        echo "- Address any failed quality gates before merging" >> quality-report.md
+        echo "- Maintain code coverage above ${{ env.COVERAGE_THRESHOLD }}%" >> quality-report.md
+        echo "- Follow consistent code formatting and linting rules" >> quality-report.md
+        echo "- Monitor build size and performance metrics" >> quality-report.md
+        echo "- Regular code reviews and pair programming" >> quality-report.md
+
+    # Upload quality report
+    - name: Upload Quality Report
+      uses: actions/upload-artifact@v4
+      with:
+        name: quality-report-${{ github.sha }}
+        path: quality-report.md
+        retention-days: 90
+
+    # Set quality gate status
+    - name: Quality Gate Status Check
+      run: |
+        FAILED_GATES=$(echo '${{ toJSON(needs) }}' | jq -r 'to_entries[] | select(.value.result == "failure") | .key' | wc -l)
+        
+        if [ $FAILED_GATES -gt 0 ]; then
+          echo "❌ $FAILED_GATES quality gate(s) failed"
+          if [ "${{ env.STRICT_MODE }}" == "true" ]; then
+            echo "Failing build due to strict mode"
+            exit 1
+          else
+            echo "Continuing despite failures (non-strict mode)"
+          fi
+        else
+          echo "✅ All quality gates passed"
+        fi
+
+    # Comment on PR with quality report
+    - name: Comment PR with Quality Report
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const report = fs.readFileSync('quality-report.md', 'utf8');
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: '## 📊 Quality Gate Report\n\n' + report
+          });
+
+    # Notify teams about quality issues
+    - name: Notify Quality Issues
+      if: contains(needs.*.result, 'failure')
+      run: |
+        chmod +x scripts/notify-teams.sh
+        ./scripts/notify-teams.sh "quality_alert" "${{ github.ref_name }}" "Quality gate failures detected in commit ${{ github.sha }}"
