@@ -1,0 +1,139 @@
+name: Cleanup AWS Resources
+on:
+  schedule:
+    - cron: '0 0 * * 0'  # Weekly on Sunday at midnight
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (show what would be deleted)'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+jobs:
+  cleanup-s3:
+    runs-on: ubuntu-latest
+    steps:
+      - name: '🔐 Configure AWS credentials'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: '🗑️ Clean old S3 versions'
+        run: |
+          DRY_RUN=${{ github.event.inputs.dry_run || 'true' }}
+          
+          # Find all app buckets
+          BUCKETS=$(aws s3api list-buckets --query "Buckets[?contains(Name, 'react-app-serverless')].Name" --output text)
+          
+          for BUCKET in $BUCKETS; do
+            echo "Processing bucket: $BUCKET"
+            
+            # List old versions (older than 30 days)
+            OLD_VERSIONS=$(aws s3api list-object-versions \
+              --bucket "$BUCKET" \
+              --query "Versions[?LastModified<'$(date -d '30 days ago' --iso-8601)'].[Key,VersionId]" \
+              --output text)
+            
+            if [ -n "$OLD_VERSIONS" ]; then
+              echo "Found old versions to clean:"
+              echo "$OLD_VERSIONS"
+              
+              if [ "$DRY_RUN" = "false" ]; then
+                while IFS=$'\t' read -r KEY VERSION_ID; do
+                  aws s3api delete-object \
+                    --bucket "$BUCKET" \
+                    --key "$KEY" \
+                    --version-id "$VERSION_ID"
+                  echo "Deleted: $KEY (version: $VERSION_ID)"
+                done <<< "$OLD_VERSIONS"
+              else
+                echo "DRY RUN: Would delete these versions"
+              fi
+            fi
+          done
+
+      - name: '📊 Clean old CloudWatch logs'
+        run: |
+          DRY_RUN=${{ github.event.inputs.dry_run || 'true' }}
+          
+          # Find log groups older than 7 days
+          OLD_LOGS=$(aws logs describe-log-groups \
+            --query "logGroups[?creationTime<'$(date -d '7 days ago' +%s)000'].logGroupName" \
+            --output text)
+          
+          if [ -n "$OLD_LOGS" ]; then
+            echo "Found old log groups:"
+            echo "$OLD_LOGS"
+            
+            if [ "$DRY_RUN" = "false" ]; then
+              for LOG_GROUP in $OLD_LOGS; do
+                aws logs delete-log-group --log-group-name "$LOG_GROUP"
+                echo "Deleted log group: $LOG_GROUP"
+              done
+            else
+              echo "DRY RUN: Would delete these log groups"
+            fi
+          fi
+
+      - name: '💰 Generate cost report'
+        run: |
+          # Get current month costs
+          COSTS=$(aws ce get-cost-and-usage \
+            --time-period Start=$(date -d 'first day of this month' +%Y-%m-%d),End=$(date +%Y-%m-%d) \
+            --granularity MONTHLY \
+            --metrics UnblendedCost \
+            --group-by Type=DIMENSION,Key=SERVICE \
+            --query 'ResultsByTime[0].Groups[*].[Keys[0],Metrics.UnblendedCost.Amount]' \
+            --output text)
+          
+          echo "## Monthly Cost Report" >> $GITHUB_STEP_SUMMARY
+          echo "Period: $(date +%B\ %Y)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Service | Cost (USD) |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|-----------|" >> $GITHUB_STEP_SUMMARY
+          
+          while IFS=$'\t' read -r SERVICE COST; do
+            echo "| $SERVICE | \$$(printf "%.2f" $COST) |" >> $GITHUB_STEP_SUMMARY
+          done <<< "$COSTS"
+
+  cleanup-github-artifacts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: '🧹 Clean old GitHub artifacts'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const dryRun = ${{ github.event.inputs.dry_run || 'true' }} === 'true';
+            const cutoffDate = new Date();
+            cutoffDate.setDate(cutoffDate.getDate() - 7);
+            
+            const artifacts = await github.rest.actions.listArtifactsForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100
+            });
+            
+            let deletedCount = 0;
+            for (const artifact of artifacts.data.artifacts) {
+              if (new Date(artifact.created_at) < cutoffDate) {
+                if (!dryRun) {
+                  await github.rest.actions.deleteArtifact({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    artifact_id: artifact.id
+                  });
+                  console.log(`Deleted: ${artifact.name}`);
+                } else {
+                  console.log(`Would delete: ${artifact.name}`);
+                }
+                deletedCount++;
+              }
+            }
+            
+            return `${dryRun ? 'Would delete' : 'Deleted'} ${deletedCount} artifacts`;

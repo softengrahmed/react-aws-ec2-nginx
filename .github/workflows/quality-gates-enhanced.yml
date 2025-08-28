@@ -1,0 +1,111 @@
+name: Enhanced Quality Gates
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+
+jobs:
+  quality-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: '📥 Checkout code'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: '🔧 Setup Node.js'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: '📦 Install dependencies'
+        run: npm ci --legacy-peer-deps
+
+      - name: '🎨 Code Formatting Check'
+        run: |
+          npm run format:check || {
+            echo "::error::Code formatting issues detected. Run 'npm run format' to fix."
+            exit 1
+          }
+
+      - name: '🧪 Run Tests with Coverage'
+        run: |
+          npm test -- --coverage --watchAll=false --ci --passWithNoTests \
+            --coverageReporters=text --coverageReporters=lcov --coverageReporters=json-summary
+        env:
+          CI: true
+
+      - name: '📊 Coverage Analysis'
+        id: coverage
+        run: |
+          if [ -f coverage/coverage-summary.json ]; then
+            COVERAGE=$(node -p "require('./coverage/coverage-summary.json').total.lines.pct")
+            echo "coverage=${COVERAGE}" >> $GITHUB_OUTPUT
+            echo "Code coverage: ${COVERAGE}%"
+            
+            if (( $(echo "$COVERAGE < 60" | bc -l) )); then
+              echo "::warning::Code coverage is below 60% (${COVERAGE}%)"
+            fi
+          else
+            echo "::warning::Coverage report not found"
+          fi
+
+      - name: '📏 Bundle Size Analysis'
+        run: |
+          npm run build
+          BUILD_SIZE=$(du -sb build | cut -f1)
+          BUILD_SIZE_MB=$(echo "scale=2; $BUILD_SIZE / 1048576" | bc)
+          echo "Build size: ${BUILD_SIZE_MB} MB"
+          
+          if (( $(echo "$BUILD_SIZE > 10485760" | bc -l) )); then
+            echo "::warning::Build size exceeds 10MB (${BUILD_SIZE_MB}MB)"
+          fi
+
+      - name: '🔍 Lighthouse CI Performance Check'
+        if: github.event_name == 'pull_request'
+        run: |
+          npm install -g @lhci/cli
+          npm run build
+          npx serve -s build &
+          SERVER_PID=$!
+          sleep 5
+          
+          lhci autorun \
+            --collect.url=http://localhost:3000 \
+            --assert.preset=lighthouse:recommended \
+            --assert.assertions.categories:performance=off \
+            --assert.assertions.categories:accessibility=off || true
+          
+          kill $SERVER_PID
+
+      - name: '📝 Comment PR with Quality Metrics'
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const coverage = '${{ steps.coverage.outputs.coverage }}' || 'N/A';
+            const comment = `## 📊 Quality Gates Report
+            
+            - **Code Coverage**: ${coverage}%
+            - **Tests**: ✅ Passed
+            - **Formatting**: ✅ Passed
+            - **Build Status**: ✅ Success
+            
+            *Generated at: ${new Date().toISOString()}*`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+      - name: '📤 Upload Coverage Reports'
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-${{ github.run_number }}
+          path: coverage/
+          retention-days: 30

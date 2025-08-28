@@ -1,0 +1,111 @@
+name: Setup AWS Monitoring
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["Main CI/CD Pipeline - AWS Serverless"]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  setup-monitoring:
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: '🔐 Configure AWS credentials'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: '📊 Setup Cost Alerts'
+        run: |
+          # Create SNS topic for alerts
+          TOPIC_ARN=$(aws sns create-topic --name react-app-cost-alerts --query 'TopicArn' --output text)
+          echo "SNS Topic: $TOPIC_ARN"
+          
+          # Create budget alert
+          aws budgets create-budget --account-id $(aws sts get-caller-identity --query Account --output text) \
+            --budget '{
+              "BudgetName": "React-App-Monthly",
+              "BudgetLimit": {
+                "Amount": "25",
+                "Unit": "USD"
+              },
+              "TimeUnit": "MONTHLY",
+              "BudgetType": "COST"
+            }' \
+            --notifications-with-subscribers '[{
+              "Notification": {
+                "NotificationType": "ACTUAL",
+                "ComparisonOperator": "GREATER_THAN",
+                "Threshold": 80,
+                "ThresholdType": "PERCENTAGE"
+              },
+              "Subscribers": [{
+                "SubscriptionType": "SNS",
+                "Address": "'"$TOPIC_ARN"'"
+              }]
+            }]' || echo "Budget already exists"
+
+      - name: '📈 Setup CloudWatch Dashboards'
+        run: |
+          # Get S3 bucket and CloudFront distribution
+          ENV_PREFIX=${{ github.ref == 'refs/heads/main' && 'prod' || 'staging' }}
+          S3_BUCKET="react-app-serverless-${ENV_PREFIX}-$(aws sts get-caller-identity --query Account --output text)"
+          
+          # Create dashboard
+          aws cloudwatch put-dashboard \
+            --dashboard-name "React-App-${ENV_PREFIX}" \
+            --dashboard-body '{
+              "widgets": [
+                {
+                  "type": "metric",
+                  "properties": {
+                    "metrics": [
+                      ["AWS/S3", "BucketSizeBytes", {"stat": "Average"}],
+                      [".", "NumberOfObjects", {"stat": "Average"}]
+                    ],
+                    "period": 86400,
+                    "stat": "Average",
+                    "region": "us-east-1",
+                    "title": "S3 Storage Metrics"
+                  }
+                },
+                {
+                  "type": "metric",
+                  "properties": {
+                    "metrics": [
+                      ["AWS/CloudFront", "Requests", {"stat": "Sum"}],
+                      [".", "BytesDownloaded", {"stat": "Sum"}]
+                    ],
+                    "period": 3600,
+                    "stat": "Sum",
+                    "region": "us-east-1",
+                    "title": "CloudFront Traffic"
+                  }
+                }
+              ]
+            }'
+
+      - name: '🔔 Setup Availability Alarms'
+        run: |
+          # Create alarm for high error rate
+          aws cloudwatch put-metric-alarm \
+            --alarm-name "React-App-High-Error-Rate" \
+            --alarm-description "Alert when error rate is high" \
+            --metric-name 4xxErrorRate \
+            --namespace AWS/CloudFront \
+            --statistic Average \
+            --period 300 \
+            --threshold 5 \
+            --comparison-operator GreaterThanThreshold \
+            --evaluation-periods 2 || echo "Alarm already exists"
+
+      - name: '📋 Generate Monitoring Summary'
+        run: |
+          echo "## Monitoring Setup Complete" >> $GITHUB_STEP_SUMMARY
+          echo "- Cost alerts configured (threshold: $25/month)" >> $GITHUB_STEP_SUMMARY
+          echo "- CloudWatch dashboards created" >> $GITHUB_STEP_SUMMARY
+          echo "- Availability alarms set" >> $GITHUB_STEP_SUMMARY
+          echo "- Check AWS Console for details" >> $GITHUB_STEP_SUMMARY

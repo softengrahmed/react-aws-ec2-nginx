@@ -1,0 +1,90 @@
+{
+  "pipeline": {
+    "version": "3.0",
+    "generatedDate": "2025-08-28",
+    "budgetTier": "budget",
+    "monthlyEstimate": "$15-20"
+  },
+  "deployment": {
+    "platform": "AWS Serverless",
+    "services": [
+      "S3",
+      "CloudFront",
+      "CloudWatch"
+    ],
+    "regions": {
+      "primary": "us-east-1",
+      "backup": null
+    }
+  },
+  "features": {
+    "security": {
+      "enabled": true,
+      "tools": [
+        "npm-audit",
+        "semgrep",
+        "snyk",
+        "trivy"
+      ]
+    },
+    "qualityGates": {
+      "enabled": true,
+      "coverageThreshold": 60,
+      "buildSizeLimit": "10MB",
+      "formatting": true
+    },
+    "containerSecurity": {
+      "enabled": true,
+      "scanner": "trivy"
+    },
+    "monitoring": {
+      "cloudWatch": true,
+      "costAlerts": true,
+      "budgetLimit": 25
+    }
+  },
+  "notifications": {
+    "email": false,
+    "slack": false,
+    "teams": false
+  },
+  "automation": {
+    "triggers": [
+      "push to main",
+      "push to develop",
+      "pull request",
+      "manual dispatch"
+    ],
+    "retryStrategy": {
+      "maxAttempts": 3,
+      "delaySeconds": 30
+    },
+    "artifactRetention": "7 days",
+    "cleanupSchedule": "weekly"
+  },
+  "secrets": {
+    "required": [
+      "AWS_ACCESS_KEY_ID",
+      "AWS_SECRET_ACCESS_KEY"
+    ],
+    "optional": [
+      "SNYK_TOKEN",
+      "SLACK_WEBHOOK_URL"
+    ]
+  },
+  "costOptimization": {
+    "s3": {
+      "lifecycleRules": true,
+      "intelligentTiering": false
+    },
+    "cloudFront": {
+      "priceClass": "PriceClass_100",
+      "compress": true,
+      "caching": "aggressive"
+    },
+    "monitoring": {
+      "retentionDays": 7,
+      "detailedMetrics": false
+    }
+  }
+}
