@@ -1,0 +1,85 @@
+---
+name: React AWS EC2 Nginx Test Automation
+version: 1.0.0
+description: Test automation specifications for React AWS EC2 Nginx application
+
+repository:
+  url: https://github.com/softengrahmed/react-aws-ec2-nginx
+  branch: test-automation-implementation-2023-11-15
+
+application:
+  type: Web Application (SPA/React)
+  baseUrl: http://localhost:3000
+
+execution:
+  strategy: Sequential
+  workers: 1
+  timeout: 30000
+  retries: 3
+
+browsers:
+  - name: chromium
+    type: Desktop Chrome
+  - name: firefox
+    type: Desktop Firefox
+
+organization:
+  strategy: Feature-based
+  structure: tests/features/[feature-name]/
+
+testData:
+  management: Fixtures
+  location: tests/fixtures/
+
+reporting:
+  type: HTML Report
+  location: playwright-report/
+
+reliability:
+  features:
+    - Auto-retry on failure (3 attempts)
+
+environments:
+  - name: staging
+    type: Production-like staging
+    baseUrl: http://localhost:3000
+
+cicd:
+  integration: Basic
+  triggers:
+    - PR to main branch
+    - Push to main branch
+
+structure:
+  directories:
+    - tests/features
+    - tests/fixtures
+    - tests/page-objects/pages
+    - tests/page-objects/components
+    - tests/helpers
+    - test-documentation
+    - test-specifications
+
+  files:
+    - playwright.config.ts
+    - tsconfig.json
+    - .eslintrc.js
+    - .prettierrc
+    - .github/workflows/test-execution.yaml
+
+pageObjects:
+  baseClass: BasePage
+  pages:
+    - HomePage
+  components:
+    - HeaderComponent
+
+helpers:
+  - AssertionHelpers
+  - WaitHelpers
+
+documentation:
+  - README-TESTING.md
+  - CONTRIBUTING-TESTS.md
+  - DEBUGGING-GUIDE.md
+  - TEST-STRATEGY.md
