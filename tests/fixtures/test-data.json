@@ -1,0 +1,21 @@
+{
+  "app": {
+    "title": "Welcome to CodeWithMuh Youtube Channel!",
+    "footerText": "© 2024 CodeWithMuh",
+    "youtubeEmbedUrl": "https://www.youtube.com/embed/Xn3Xj9Trepc?si=3ObvKIX4iKU-nHbf",
+    "linkedInUrl": "https://www.linkedin.com/in/muhammad-rashid-daha/",
+    "youtubeChannelUrl": "https://youtube.com/@codewithmuh?sub_confirmation=1",
+    "githubRepoUrl": "https://github.com/codewithmuh/react-aws-ec2-nginx.git"
+  },
+  "environments": {
+    "local": {
+      "baseUrl": "http://localhost:3000"
+    },
+    "staging": {
+      "baseUrl": "https://staging-app-url.com"
+    },
+    "production": {
+      "baseUrl": "https://production-app-url.com"
+    }
+  }
+}
