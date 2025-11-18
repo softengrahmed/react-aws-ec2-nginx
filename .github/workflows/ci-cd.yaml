@@ -507,9 +507,14 @@ jobs:
     name: 📊 Generate Enhanced Report
     runs-on: ubuntu-latest
     needs: [build-react, deploy-s3, deploy-api, verify-deployment]
-    if: always() && needs.deploy-s3.outputs.deployment-status == 'success'
+    if: false
     
     steps:
+    - name: ⏭️ Job Skipped
+      run: |
+        echo "📊 Report generation has been disabled"
+        echo "This job is currently skipped to optimize workflow execution time"
+      
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0
@@ -860,7 +865,7 @@ jobs:
     name: 🧹 Cleanup Demo Resources
     runs-on: ubuntu-latest
     needs: [deploy-s3, deploy-api, verify-deployment]
-    if: always() && github.event.inputs.deployment_env == 'development'
+    if: always() 
     
     steps:
     - uses: aws-actions/configure-aws-credentials@v4
