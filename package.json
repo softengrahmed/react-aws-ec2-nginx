@@ -28,7 +28,20 @@
     "test": "react-scripts test",
     "eject": "react-scripts eject",
     "format": "prettier --write \"src/**/*.{js,jsx,ts,tsx,json,css,md}\"",
-    "format:check": "prettier --check \"src/**/*.{js,jsx,ts,tsx,json,css,md}\""
+    "format:check": "prettier --check \"src/**/*.{js,jsx,ts,tsx,json,css,md}\"",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:debug": "playwright test --debug",
+    "test:e2e:chromium": "playwright test --project=chromium",
+    "test:e2e:firefox": "playwright test --project=firefox",
+    "test:e2e:report": "playwright show-report",
+    "test:e2e:trace": "playwright show-trace",
+    "test:e2e:codegen": "playwright codegen",
+    "lint:e2e": "eslint tests/**/*.ts",
+    "lint:e2e:fix": "eslint tests/**/*.ts --fix",
+    "format:e2e": "prettier --write tests/**/*.ts",
+    "format:e2e:check": "prettier --check tests/**/*.ts"
   },
   "eslintConfig": {
     "extends": [
