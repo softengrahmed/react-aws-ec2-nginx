@@ -9,8 +9,8 @@ repository:
 
 application:
   type: Web Application (SPA/React)
-  baseUrl: http://localhost:3000
-
+  baseUrl: http://react-serverless-19482488580.s3-website-us-east-1.amazonaws.com/
+  
 execution:
   strategy: Sequential
   workers: 1
