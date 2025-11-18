@@ -1,0 +1,16 @@
+{
+  "appTitle": "React App",
+  "headerText": "Edit src/App.js and save to reload",
+  "linkText": "Learn React",
+  "linkUrl": "https://reactjs.org",
+  "testMessages": [
+    "Hello World",
+    "Testing is important",
+    "Playwright makes testing easier"
+  ],
+  "validationMessages": {
+    "required": "This field is required",
+    "invalidEmail": "Please enter a valid email address",
+    "invalidPassword": "Password must be at least 8 characters long"
+  }
+}
