@@ -1,0 +1,41 @@
+{
+  "name": "react-aws-ec2-nginx-tests",
+  "version": "1.0.0",
+  "description": "Test automation package for react-aws-ec2-nginx",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "test:debug": "playwright test --debug",
+    "test:smoke": "playwright test tests/features/smoke",
+    "test:critical": "playwright test tests/features/critical",
+    "test:regression": "playwright test tests/features/regression",
+    "test:chromium": "playwright test --project=chromium",
+    "test:staging": "playwright test --config=playwright.staging.config.ts",
+    "test:prod": "playwright test --config=playwright.prod.config.ts",
+    "test:report": "playwright show-report",
+    "test:trace": "playwright show-trace",
+    "test:codegen": "playwright codegen",
+    "lint": "eslint tests/**/*.ts",
+    "lint:fix": "eslint tests/**/*.ts --fix",
+    "format": "prettier --write tests/**/*.ts",
+    "format:check": "prettier --check tests/**/*.ts"
+  },
+  "keywords": [
+    "playwright",
+    "testing",
+    "automation",
+    "e2e"
+  ],
+  "devDependencies": {
+    "@playwright/test": "^1.37.0",
+    "@types/node": "^20.5.0",
+    "@typescript-eslint/eslint-plugin": "^6.4.0",
+    "@typescript-eslint/parser": "^6.4.0",
+    "dotenv": "^16.3.1",
+    "eslint": "^8.47.0",
+    "eslint-plugin-playwright": "^0.15.3",
+    "prettier": "^3.0.2",
+    "typescript": "^5.1.6"
+  }
+}
