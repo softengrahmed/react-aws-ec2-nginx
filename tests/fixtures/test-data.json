@@ -1,0 +1,19 @@
+{
+  "urls": {
+    "youtube": "https://youtube.com/@codewithmuh",
+    "linkedin": "https://www.linkedin.com/in/muhammad-rashid-daha/",
+    "github": "https://github.com/codewithmuh/react-aws-ec2-nginx.git"
+  },
+  "texts": {
+    "header": "Welcome to CodeWithMuh Youtube Channel!",
+    "footer": "© 2024 CodeWithMuh",
+    "videoDescription": "You are watching my latest video on AWS EC2.",
+    "linkedinQuestion": "Are you connected with me on LinkedIn?",
+    "notConnected": "No, you are not connected with me on LinkedIn. Connect now:"
+  },
+  "buttons": {
+    "checkConnection": "Check Connection",
+    "subscribe": "Subscribe to my channel",
+    "githubRepo": "Github Repo"
+  }
+}
