@@ -1,0 +1,19 @@
+{
+  "homePageData": {
+    "expectedTitle": "React App",
+    "expectedHeaderText": "Edit src/App.js and save to reload.",
+    "expectedLinkText": "Learn React",
+    "expectedLinkUrl": "https://reactjs.org"
+  },
+  "navigationData": {
+    "routes": [
+      {
+        "name": "Home",
+        "path": "/"
+      }
+    ]
+  },
+  "environmentUrls": {
+    "staging": "http://localhost:3000"
+  }
+}
