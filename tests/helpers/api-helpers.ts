@@ -1,0 +1,1 @@
+export const apiHelper = {\n    async fetchData(url) {\n        const response = await fetch(url);\n        return await response.json();\n    }\n};
