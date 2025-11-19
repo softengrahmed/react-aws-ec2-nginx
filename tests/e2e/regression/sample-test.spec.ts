@@ -1,0 +1,1 @@
+import { test, expect } from '@playwright/test';\n\n// Sample regression test\n\ntest('Regression Test', async ({ page }) => {\n    await page.goto('https://example.com');\n    await expect(page.locator('h1')).toHaveText('Example Domain');\n});
