@@ -1,0 +1,1 @@
+import { BasePage } from '../base-page';\n\nexport class DashboardPage extends BasePage {\n    async getWelcomeMessage() {\n        return await this.page.textContent('#welcome-message');\n    }\n}
