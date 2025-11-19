@@ -1,0 +1,1 @@
+export async function assertElementVisible(page, selector) {\n    const isVisible = await page.isVisible(selector);\n    if (!isVisible) {\n        throw new Error(`Element ${selector} is not visible`);\n    }\n}
