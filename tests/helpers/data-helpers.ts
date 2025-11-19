@@ -1,0 +1,1 @@
+export const dataHelper = {\n    generateUserData() {\n        return {\n            username: 'user' + Math.random().toString(36).substring(7),\n            email: 'user@example.com'\n        };\n    }\n};
