@@ -1,0 +1,1 @@
+import { BasePage } from '../base-page';\n\nexport class LoginPage extends BasePage {\n    async login(username, password) {\n        await this.page.fill('#username', username);\n        await this.page.fill('#password', password);\n        await this.page.click('#login-button');\n    }\n}
