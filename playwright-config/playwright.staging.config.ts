@@ -1,0 +1,1 @@
+const { defineConfig } = require('@playwright/test');\n\nmodule.exports = defineConfig({\n    use: {\n        baseURL: 'https://staging.example.com',\n    },\n});
