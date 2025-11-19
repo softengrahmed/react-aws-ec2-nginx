@@ -1,0 +1,57 @@
+name: Run Playwright Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      browser:
+        description: 'Browser to run tests on'
+        required: true
+        default: 'chromium'
+        type: choice
+        options:
+          - chromium
+          - firefox
+          - both
+
+jobs:
+  test:
+    name: Run Playwright Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          ref: test-automation-implementation-2023-11-15_v2
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+      
+      - name: Install dependencies
+        working-directory: ./tests
+        run: npm install
+      
+      - name: Install Playwright browsers
+        working-directory: ./tests
+        run: npx playwright install chromium firefox
+      
+      - name: Run Playwright tests
+        working-directory: ./tests
+        run: |
+          if [ "${{ github.event.inputs.browser }}" == "chromium" ]; then
+            PLAYWRIGHT_MCP=1 npx playwright test --project=chromium
+          elif [ "${{ github.event.inputs.browser }}" == "firefox" ]; then
+            PLAYWRIGHT_MCP=1 npx playwright test --project=firefox
+          else
+            PLAYWRIGHT_MCP=1 npx playwright test
+          fi
+      
+      - name: Upload HTML report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: playwright-report
+          path: tests/playwright-report/
+          retention-days: 30
