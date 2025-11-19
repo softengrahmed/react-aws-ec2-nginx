@@ -1,0 +1,1 @@
+import { test, expect } from '@playwright/test';\n\n// Sample critical test\n\ntest('Sample Critical Test', async ({ page }) => {\n    await page.goto('https://example.com');\n    const title = await page.title();\n    expect(title).toBe('Example Domain');\n});
