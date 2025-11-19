@@ -1,0 +1,1 @@
+# Test Automation Package\n\n## Setup Instructions\n1. Clone the repository.\n2. Install dependencies: `npm install`\n3. Run tests: `npm test`\n\n## Usage Examples\n- Run all tests: `npm test`\n- Run smoke tests: `npm run test:smoke`\n\n## Troubleshooting\nRefer to DEBUGGING-GUIDE.md for common issues.
