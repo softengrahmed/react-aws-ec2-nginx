@@ -1,0 +1,1 @@
+export const productionConfig = {\n    baseURL: 'https://example.com',\n};
