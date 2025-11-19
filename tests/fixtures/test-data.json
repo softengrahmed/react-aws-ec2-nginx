@@ -1,0 +1,35 @@
+{
+  "application": {
+    "name": "React AWS EC2 Nginx",
+    "version": "0.1.0",
+    "environment": "test"
+  },
+  "urls": {
+    "local": "http://localhost:3000",
+    "staging": "https://staging.example.com",
+    "production": "https://production.example.com"
+  },
+  "testConfig": {
+    "defaultTimeout": 30000,
+    "retryAttempts": 2,
+    "screenshotOnFailure": true,
+    "videoOnFailure": true
+  },
+  "expectedElements": {
+    "homePage": {
+      "logo": ".App-logo",
+      "header": ".App-header",
+      "learnReactLink": "a[href*='reactjs.org']"
+    }
+  },
+  "expectedTexts": {
+    "homePage": {
+      "editPrompt": "Edit src/App.js and save to reload.",
+      "learnReactText": "Learn React"
+    }
+  },
+  "performance": {
+    "maxPageLoadTime": 5000,
+    "maxAPIResponseTime": 2000
+  }
+}
