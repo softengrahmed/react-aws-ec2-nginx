@@ -1,0 +1,1 @@
+export const waitHelper = {\n    async waitForElement(selector, page) {\n        await page.waitForSelector(selector);\n    }\n};
