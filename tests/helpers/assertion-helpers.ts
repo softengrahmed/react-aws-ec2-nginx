@@ -1,0 +1,1 @@
+export const assertionHelper = {\n    async assertTitle(page, expectedTitle) {\n        const title = await page.title();\n        expect(title).toBe(expectedTitle);\n    }\n};
