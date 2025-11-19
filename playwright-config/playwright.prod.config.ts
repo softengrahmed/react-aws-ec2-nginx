@@ -1,0 +1,1 @@
+import { defineConfig } from '@playwright/test';\nimport { productionConfig } from '../tests/config/environments/production.config';\n\nexport default defineConfig({\n    use: { baseURL: productionConfig.baseURL },\n});
