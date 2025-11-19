@@ -1,0 +1,1 @@
+# Contributing to Tests\n\n## Guidelines\n- Follow the naming conventions for test files and classes.\n- Ensure tests are independent and can run in isolation.\n- Use the provided helper functions to avoid code duplication.\n\n## Best Practices\n- Write clear and concise test cases.\n- Use meaningful assertions.\n- Document complex logic with comments.
