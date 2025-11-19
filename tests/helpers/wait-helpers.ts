@@ -1,0 +1,1 @@
+export async function waitForElementToBeVisible(page, selector) {\n    await page.waitForSelector(selector, { state: 'visible' });\n}
