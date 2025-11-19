@@ -1,0 +1,1 @@
+export class BasePage {\n    constructor(page) {\n        this.page = page;\n    }\n\n    async navigateTo(url) {\n        await this.page.goto(url);\n    }\n\n    async waitForElement(selector) {\n        await this.page.waitForSelector(selector);\n    }\n}
