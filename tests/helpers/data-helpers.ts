@@ -1,0 +1,1 @@
+export function generateRandomUser() {\n    return {\n        username: 'user' + Math.random().toString(36).substring(2, 7),\n        password: 'pass' + Math.random().toString(36).substring(2, 7)\n    };\n}
