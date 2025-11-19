@@ -1,0 +1,1 @@
+application:\n  type: Web Application\nexecution:\n  strategy: Parallel\nbrowsers:\n  - Chromium\n  -
