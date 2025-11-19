@@ -1,0 +1,1 @@
+# Debugging Guide\n\n## Common Issues\n- If tests fail, check the console output for error messages.\n- Ensure that the application is running in the expected environment.\n\n## Debugging Tips\n- Use the `--headed` flag to run tests in headed mode for better visibility.\n- Utilize the Playwright Inspector for step-by-step debugging.
