@@ -1,0 +1,1 @@
+export class HeaderComponent {\n    constructor(page) {\n        this.page = page;\n    }\n\n    async isVisible() {\n        return await this.page.isVisible('header');\n    }\n}
