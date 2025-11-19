@@ -1,0 +1,138 @@
+---
+name: React AWS EC2 Nginx Test Automation
+version: 1.0.0
+description: Test automation framework for React AWS EC2 Nginx project
+
+specifications:
+  repository: https://github.com/softengrahmed/react-aws-ec2-nginx
+  application_type: Web Application (SPA/React/Vue/Angular)
+  test_execution_strategy: Sequential - 1 worker, ~45-60 min execution, lower resources
+  browser_selection:
+    - Chromium (Chrome, Edge)
+    - Firefox
+  test_organization_strategy: Feature-based (tests/features/[feature-name]/)
+  test_data_management: Fixtures - Static JSON test data files
+  reporting_and_monitoring:
+    - HTML Report (Playwright native)
+  test_reliability_features:
+    - Auto-retry on failure (3 attempts)
+  testing_environment: Single Environment - Production-like staging
+  ci_cd_integration: Basic - Run on PR and main branch push
+
+structure:
+  directories:
+    - tests/features/home
+    - tests/features/navigation
+    - tests/features/ui
+    - tests/fixtures
+    - tests/page-objects/pages
+    - tests/page-objects/components
+    - tests/helpers
+    - .github/workflows
+
+  files:
+    config:
+      - tests/playwright.config.ts
+      - tests/tsconfig.json
+      - tests/.eslintrc.js
+      - tests/.prettierrc
+      - tests/.gitignore
+      - tests/package.json
+    
+    page_objects:
+      - tests/page-objects/base-page.ts
+      - tests/page-objects/pages/home-page.ts
+      - tests/page-objects/components/header-component.ts
+      - tests/page-objects/components/footer-component.ts
+    
+    helpers:
+      - tests/helpers/assertion-helpers.ts
+      - tests/helpers/wait-helpers.ts
+    
+    fixtures:
+      - tests/fixtures/test-data.json
+    
+    tests:
+      - tests/features/home/home-page.spec.ts
+      - tests/features/navigation/external-links.spec.ts
+      - tests/features/ui/visual-elements.spec.ts
+    
+    ci_cd:
+      - .github/workflows/test-execution.yaml
+    
+    documentation:
+      - tests/README.md
+      - tests/CONTRIBUTING.md
+      - tests/DEBUGGING.md
+      - tests/TEST-STRATEGY.md
+      - tests/test-automation-specification-report.md
+      - tests/test-coverage-matrix.md
+
+test_cases:
+  - name: Display header and footer
+    feature: Home Page
+    priority: High
+    file: features/home/home-page.spec.ts
+  
+  - name: Display YouTube embed
+    feature: Home Page
+    priority: Medium
+    file: features/home/home-page.spec.ts
+  
+  - name: Show LinkedIn connection result
+    feature: Home Page
+    priority: Medium
+    file: features/home/home-page.spec.ts
+  
+  - name: Verify button text
+    feature: Home Page
+    priority: Low
+    file: features/home/home-page.spec.ts
+  
+  - name: Open YouTube channel
+    feature: Navigation
+    priority: High
+    file: features/navigation/external-links.spec.ts
+  
+  - name: Open GitHub repo
+    feature: Navigation
+    priority: Medium
+    file: features/navigation/external-links.spec.ts
+  
+  - name: LinkedIn link in result text
+    feature: Navigation
+    priority: Low
+    file: features/navigation/external-links.spec.ts
+  
+  - name: Display React logo
+    feature: UI Elements
+    priority: Medium
+    file: features/ui/visual-elements.spec.ts
+  
+  - name: Header structure
+    feature: UI Elements
+    priority: Medium
+    file: features/ui/visual-elements.spec.ts
+  
+  - name: Footer structure
+    feature: UI Elements
+    priority: Medium
+    file: features/ui/visual-elements.spec.ts
+  
+  - name: YouTube video embed attributes
+    feature: UI Elements
+    priority: Low
+    file: features/ui/visual-elements.spec.ts
+
+npm_scripts:
+  test: playwright test
+  test:headed: playwright test --headed
+  test:ui: playwright test --ui
+  test:debug: playwright test --debug
+  test:chromium: playwright test --project=chromium
+  test:firefox: playwright test --project=firefox
+  lint: eslint features/**/*.ts
+  lint:fix: eslint features/**/*.ts --fix
+  format: prettier --write features/**/*.ts
+  format:check: prettier --check features/**/*.ts
+  report: playwright show-report
