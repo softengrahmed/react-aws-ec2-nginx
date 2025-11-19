@@ -1,0 +1,1 @@
+export class HeaderComponent {\n    constructor(page) {\n        this.page = page;\n    }\n\n    async clickLogo() {\n        await this.page.click('#logo');\n    }\n}
