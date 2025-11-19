@@ -1,0 +1,1 @@
+# Testing Strategy\n\n## Coverage Goals\n- Aim for 80% code coverage.\n\n## Priorities\n- Focus on critical user journeys first.
