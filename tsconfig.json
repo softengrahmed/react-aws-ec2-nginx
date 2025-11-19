@@ -1,0 +1,34 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "commonjs",
+    "lib": ["ESNext", "DOM"],
+    "moduleResolution": "node",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "types": ["node", "@playwright/test"],
+    "outDir": "./dist",
+    "rootDir": ".",
+    "baseUrl": ".",
+    "paths": {
+      "@tests/*": ["tests/*"],
+      "@page-objects/*": ["tests/page-objects/*"],
+      "@helpers/*": ["tests/helpers/*"],
+      "@fixtures/*": ["tests/fixtures/*"],
+      "@config/*": ["tests/config/*"]
+    }
+  },
+  "include": [
+    "tests/**/*",
+    "playwright-config/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "tests/reports",
+    "tests/test-results",
+    "dist"
+  ]
+}
