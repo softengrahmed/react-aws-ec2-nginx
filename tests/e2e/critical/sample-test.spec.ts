@@ -1,0 +1,1 @@
+import { test, expect } from '@playwright/test';\n\n// Sample critical test\n\ntest('Critical User Journey', async ({ page }) => {\n    await page.goto('https://example.com');\n    await expect(page).toHaveTitle(/Example Domain/);\n});
