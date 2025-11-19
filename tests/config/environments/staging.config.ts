@@ -1,0 +1,1 @@
+export const stagingConfig = {\n    baseURL: 'https://staging.example.com',\n};
