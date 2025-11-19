@@ -1,0 +1,1 @@
+# Test Strategy\n\n## Coverage Goals\n- Aim for at least 80% code coverage across all features.\n\n## Test Types\n- End-to-End (E2E) tests for critical user journeys.\n- Regression tests for existing functionalities.\n- Smoke tests for quick health checks.
