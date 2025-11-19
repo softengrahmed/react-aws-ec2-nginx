@@ -1,0 +1,1 @@
+export const stagingConfig = {\n    baseURL: 'https://staging.example.com',\n    timeout: 30000\n};
