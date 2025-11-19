@@ -1,0 +1,1 @@
+# Contributing to Tests\n\n## Guidelines\n- Follow the naming conventions for test files.\n- Use Page Object Model for structuring tests.\n- Ensure tests are isolated and do not depend on each other.
