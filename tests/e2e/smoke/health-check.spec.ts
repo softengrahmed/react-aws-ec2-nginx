@@ -1,0 +1,1 @@
+import { test, expect } from '@playwright/test';\n\n// Sample smoke test\n\ntest('Smoke Test - Health Check', async ({ page }) => {\n    await page.goto('https://example.com');\n    await expect(page).toBeVisible('h1');\n});
