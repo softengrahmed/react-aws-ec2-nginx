@@ -1,0 +1,1 @@
+module.exports = {\n  env: {\n    browser: true,\n    es2021: true,\n  },\n  extends: [\n    'eslint:recommended',\n    'plugin:@typescript-eslint/recommended'\n  ],\n  parser: '@typescript-eslint/parser',\n  parserOptions: {\n    ecmaVersion: 12,\n    sourceType: 'module'\n  },\n  rules: {\n    // Custom rules can be added here\n  }\n};
