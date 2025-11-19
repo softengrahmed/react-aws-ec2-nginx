@@ -1,0 +1,1 @@
+export async function fetchData(url) {\n    const response = await fetch(url);\n    return await response.json();\n}
