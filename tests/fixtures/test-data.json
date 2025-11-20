@@ -1,0 +1,15 @@
+{
+  "appTitle": "Welcome to CodeWithMuh Youtube Channel!",
+  "channelName": "CodeWithMuh",
+  "expectedTexts": {
+    "awsText": "AWS EC2",
+    "linkedInGameTitle": "LinkedIn Connection Game",
+    "connectionQuestion": "Are you connected with me on LinkedIn?",
+    "footerYear": "2024"
+  },
+  "urls": {
+    "youtube": "youtube.com/@codewithmuh",
+    "github": "github.com/codewithmuh/react-aws-ec2-nginx.git",
+    "linkedin": "linkedin.com/in/muhammad-rashid-daha"
+  }
+}
