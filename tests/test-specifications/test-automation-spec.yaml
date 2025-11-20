@@ -1,0 +1,79 @@
+---
+name: React AWS EC2 Nginx Test Automation
+version: 1.0.0
+date: "2023-07-15"
+
+application:
+  type: "Web Application (SPA/React)"
+  repository: "https://github.com/softengrahmed/react-aws-ec2-nginx"
+
+test_execution:
+  strategy: "Sequential"
+  workers: 1
+  estimated_duration: "45-60 minutes"
+  resource_usage: "Low"
+
+browsers:
+  - name: "Chromium"
+    versions: ["Latest"]
+    platforms: ["Desktop"]
+
+test_organization:
+  strategy: "Feature-based"
+  structure: "tests/features/[feature-name]/"
+
+test_data:
+  strategy: "Fixtures"
+  format: "JSON"
+  location: "tests/fixtures/"
+
+reporting:
+  primary: "HTML Report (Playwright native)"
+  location: "playwright-report/"
+  retention: "30 days"
+
+reliability:
+  features:
+    - "Auto-retry on failure (3 attempts)"
+
+environments:
+  strategy: "Single Environment"
+  environments:
+    - name: "Staging"
+      url: "http://localhost:3000"
+
+ci_cd:
+  integration: "GitHub Actions"
+  triggers:
+    - "On PR to main branch"
+    - "On push to main branch"
+
+page_objects:
+  base_class: "BasePage"
+  organization:
+    - "pages/: Page-specific classes"
+    - "components/: Reusable UI components"
+
+helpers:
+  - name: "wait-helpers.ts"
+    purpose: "Smart waiting strategies"
+  - name: "assertion-helpers.ts"
+    purpose: "Custom assertions"
+
+test_coverage:
+  features:
+    - name: "Home Page"
+      priority: "High"
+      tests:
+        - "Display title and header"
+        - "YouTube video iframe"
+        - "AWS EC2 text display"
+        - "LinkedIn connection game"
+        - "External navigation buttons"
+        - "Footer display"
+    - name: "Smoke Tests"
+      priority: "Critical"
+      tests:
+        - "Application loads successfully"
+        - "Critical UI components visible"
+        - "LinkedIn connection check works"
